@@ -66,6 +66,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             String payload = extraerObjetoPayload(raw);
             if (payload == null) payload = raw;
             Long canalId = extraerLong(payload, "canalId");
+            if (canalId == null) {
+                String canalObj = extraerObjeto(payload, "canal");
+                if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
+            }
             Long id = extraerLong(payload, "id");
             Long emisor = extraerLong(payload, "emisor");
             String tipo = extraerCampo(payload, "tipo");
@@ -83,7 +87,25 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             if (contenido != null) sb.append("- contenido: ").append(contenido).append('\n');
             if (rutaArchivo != null) sb.append("- rutaArchivo: ").append(rutaArchivo).append('\n');
             if (transcripcion != null) sb.append("- transcripcion: ").append(transcripcion).append('\n');
+            sb.append("- jsonCompleto: ").append(raw).append('\n');
             sb.append("====================================\n");
+            System.out.println(sb.toString());
+        } else if (compact.contains("\"command\":\"NEW_MESSAGE\"")) {
+            String raw = mensaje.replace('\n',' ').replace('\r',' ');
+            String payload = extraerObjetoPayload(raw);
+            if (payload == null) payload = raw;
+            Long emisor = obtenerCampoLong(payload, "emisor", "emisorId");
+            Long receptor = obtenerCampoLong(payload, "receptor", "receptorId");
+            String tipo = obtenerCampoTexto(payload, "tipo", "tipoMensaje");
+            String contenido = obtenerCampoTextoPermitirNulo(payload, "contenido", "texto");
+            StringBuilder sb = new StringBuilder();
+            sb.append("\n==== NEW_MESSAGE recibido ====\n");
+            sb.append("- tipo: ").append(tipo).append('\n');
+            sb.append("- emisor: ").append(emisor).append('\n');
+            sb.append("- receptor: ").append(receptor).append('\n');
+            if (contenido != null) sb.append("- contenido: ").append(contenido).append('\n');
+            sb.append("- jsonCompleto: ").append(raw).append('\n');
+            sb.append("===============================\n");
             System.out.println(sb.toString());
         }
         ioPool.submit(() -> procesarEventoMensaje(mensaje));
@@ -184,6 +206,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             Long receptor = obtenerCampoLong(payload, "receptor", "receptorId");
             String receptorNombre = obtenerCampoTextoPermitirNulo(payload, "receptorNombre", "nombreReceptor", "receptor_nombre", "receptorNombreUsuario", "receptorName");
             Long canalId = obtenerCampoLong(payload, "canalId");
+            if (canalId == null) {
+                String canalObj = extraerObjeto(payload, "canal");
+                if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
+            }
             Long serverId = obtenerCampoLong(payload, "id");
             java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payload, "timeStamp", "timestamp"));
             String tipoConversacion = obtenerCampoTexto(payload, "tipoConversacion");
