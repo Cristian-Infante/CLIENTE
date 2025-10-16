@@ -41,8 +41,60 @@ public class ClienteChatTcp implements Closeable {
         hiloLector = new Thread(() -> {
             try {
                 String linea;
+                StringBuilder buffer = new StringBuilder();
+                int nivelEstructura = 0;
+                boolean enCadena = false;
+                boolean escape = false;
                 while (conectado.get() && (linea = lector.readLine()) != null) {
-                    for (OyenteMensajesChat o : oyentes) o.alRecibirMensaje(linea);
+                    if (linea.isEmpty() && nivelEstructura == 0 && buffer.length() == 0) {
+                        continue;
+                    }
+                    for (int i = 0; i < linea.length(); i++) {
+                        char ch = linea.charAt(i);
+                        if (nivelEstructura == 0 && !enCadena && buffer.length() == 0 && Character.isWhitespace(ch)) {
+                            continue;
+                        }
+                        buffer.append(ch);
+                        if (enCadena) {
+                            if (escape) {
+                                escape = false;
+                            } else if (ch == '\\') {
+                                escape = true;
+                            } else if (ch == '"') {
+                                enCadena = false;
+                            }
+                            continue;
+                        }
+                        if (ch == '"') {
+                            enCadena = true;
+                            continue;
+                        }
+                        if (ch == '{' || ch == '[') {
+                            nivelEstructura++;
+                        } else if (ch == '}' || ch == ']') {
+                            if (nivelEstructura > 0) nivelEstructura--;
+                            if (nivelEstructura == 0) {
+                                String mensajeCompleto = buffer.toString();
+                                buffer.setLength(0);
+                                for (OyenteMensajesChat o : oyentes) o.alRecibirMensaje(mensajeCompleto);
+                            }
+                        }
+                    }
+                    if (nivelEstructura > 0 || enCadena) {
+                        buffer.append('\n');
+                    } else if (buffer.length() > 0) {
+                        String mensajeCompleto = buffer.toString().trim();
+                        if (!mensajeCompleto.isEmpty()) {
+                            for (OyenteMensajesChat o : oyentes) o.alRecibirMensaje(mensajeCompleto);
+                        }
+                        buffer.setLength(0);
+                    }
+                }
+                if (buffer.length() > 0 && nivelEstructura == 0 && !enCadena) {
+                    String mensajeCompleto = buffer.toString().trim();
+                    if (!mensajeCompleto.isEmpty()) {
+                        for (OyenteMensajesChat o : oyentes) o.alRecibirMensaje(mensajeCompleto);
+                    }
                 }
             } catch (IOException e) {
                 for (OyenteMensajesChat o : oyentes) o.alError(e);
