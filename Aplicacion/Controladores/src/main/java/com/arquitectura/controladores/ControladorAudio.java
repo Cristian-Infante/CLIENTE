@@ -64,7 +64,15 @@ public class ControladorAudio {
             if (audioPcm == null || audioPcm.length == 0) return false;
             GuardadoAudio g = guardarComoWav(audioPcm, false, usuarioId);
             ServicioMensajes sm = new ServicioMensajes(new RepositorioMensajes(), conexion);
-            sm.enviarAudioArchivoAPrivado(clienteActual.getId(), usuarioId, g.ruta, "audio/wav", g.duracionSeg);
+            sm.enviarAudioArchivoAPrivado(
+                    clienteActual.getId(),
+                    clienteActual.getNombreDeUsuario(),
+                    usuarioId,
+                    null,
+                    g.ruta,
+                    "audio/wav",
+                    g.duracionSeg
+            );
             return true;
         } catch (Exception e) {
             return false;
@@ -76,7 +84,14 @@ public class ControladorAudio {
             if (audioPcm == null || audioPcm.length == 0) return false;
             GuardadoAudio g = guardarComoWav(audioPcm, true, canalId);
             ServicioMensajes sm = new ServicioMensajes(new RepositorioMensajes(), conexion);
-            sm.enviarAudioArchivoACanal(clienteActual.getId(), canalId, g.ruta, "audio/wav", g.duracionSeg);
+            sm.enviarAudioArchivoACanal(
+                    clienteActual.getId(),
+                    clienteActual.getNombreDeUsuario(),
+                    canalId,
+                    g.ruta,
+                    "audio/wav",
+                    g.duracionSeg
+            );
             return true;
         } catch (Exception e) {
             return false;
