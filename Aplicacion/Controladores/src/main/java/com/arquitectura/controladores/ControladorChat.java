@@ -19,9 +19,16 @@ public class ControladorChat {
         this.servicioMensajes = new ServicioMensajes(new RepositorioMensajes(), conexion);
     }
 
-    public boolean enviarMensajeUsuario(Long receptorId, String texto) {
+    public boolean enviarMensajeUsuario(Long receptorId, String receptorNombre, String texto) {
         try {
-            servicioMensajes.enviarTextoAPrivado(clienteActual.getId(), receptorId, texto, "TEXTO");
+            servicioMensajes.enviarTextoAPrivado(
+                    clienteActual.getId(),
+                    clienteActual.getNombreDeUsuario(),
+                    receptorId,
+                    receptorNombre,
+                    texto,
+                    "TEXTO"
+            );
             return true;
         } catch (IOException e) {
             return false; // error real de IO hacia servidor
@@ -33,7 +40,13 @@ public class ControladorChat {
 
     public boolean enviarMensajeCanal(Long canalId, String nombreCanal, String texto) {
         try {
-            servicioMensajes.enviarTextoACanal(clienteActual.getId(), canalId, texto, "TEXTO");
+            servicioMensajes.enviarTextoACanal(
+                    clienteActual.getId(),
+                    clienteActual.getNombreDeUsuario(),
+                    canalId,
+                    texto,
+                    "TEXTO"
+            );
             return true;
         } catch (IOException e) {
             return false;
@@ -52,7 +65,13 @@ public class ControladorChat {
                     String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
                     if (ts.length() > 5) ts = ts.substring(0, 5);
                     boolean soyYo = m.getEmisor() != null && m.getEmisor().equals(clienteActual.getId());
-                    String prefix = soyYo ? "Yo" : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
+                    String prefix;
+                    if (soyYo) {
+                        prefix = "Yo";
+                    } else {
+                        String nombre = m.getEmisorNombre();
+                        prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
+                    }
                     if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
                         lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
                     } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
@@ -77,12 +96,20 @@ public class ControladorChat {
                 for (var m : msgs) {
                     String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
                     if (ts.length() > 5) ts = ts.substring(0, 5);
-                    if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
-                        lines.add("[" + ts + "] #" + (m.getEmisor() != null ? m.getEmisor() : "?") + ": " + (t.getContenido() != null ? t.getContenido() : ""));
-                    } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
-                        lines.add("[" + ts + "] #" + (m.getEmisor() != null ? m.getEmisor() : "?") + ": [Audio] " + (a.getRutaArchivo() != null ? a.getRutaArchivo() : ""));
+                    boolean soyYo = m.getEmisor() != null && m.getEmisor().equals(clienteActual.getId());
+                    String prefix;
+                    if (soyYo) {
+                        prefix = "Yo";
                     } else {
-                        lines.add("[" + ts + "] #" + (m.getEmisor() != null ? m.getEmisor() : "?") + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
+                        String nombre = m.getEmisorNombre();
+                        prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
+                    }
+                    if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
+                        lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
+                    } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
+                        lines.add("[" + ts + "] " + prefix + ": [Audio] " + (a.getRutaArchivo() != null ? a.getRutaArchivo() : ""));
+                    } else {
+                        lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
                     }
                 }
             }

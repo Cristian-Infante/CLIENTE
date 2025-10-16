@@ -110,7 +110,9 @@ public class ConfigClienteDB {
                 " fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
                 " tipo VARCHAR(32) NOT NULL," +
                 " emisor_id BIGINT NOT NULL," +
+                " emisor_nombre VARCHAR(255)," +
                 " receptor_id BIGINT," +
+                " receptor_nombre VARCHAR(255)," +
                 " canal_id BIGINT," +
                 " es_audio BOOLEAN NOT NULL," +
                 " texto CLOB," +
@@ -118,6 +120,8 @@ public class ConfigClienteDB {
                 ")"
             );
             // Evolución de esquema: columnas para deduplicación por id/timestamp del servidor
+            try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS emisor_nombre VARCHAR(255)"); } catch (SQLException ignored) {}
+            try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS receptor_nombre VARCHAR(255)"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS server_id BIGINT"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS server_ts TIMESTAMP"); } catch (SQLException ignored) {}
             try { st.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS ux_mensajes_server_id ON mensajes(server_id)"); } catch (SQLException ignored) {}

@@ -409,7 +409,11 @@ public class VistaChatPrincipal extends JFrame {
         if (texto.isEmpty()) return;
         boolean enviado = false;
         if (usuarioSeleccionado != null) {
-            enviado = chatController.enviarMensajeUsuario(usuarioSeleccionado.getId(), texto);
+            enviado = chatController.enviarMensajeUsuario(
+                    usuarioSeleccionado.getId(),
+                    usuarioSeleccionado.getNombreDeUsuario(),
+                    texto
+            );
         } else if (canalSeleccionado != null) {
             enviado = chatController.enviarMensajeCanal(canalSeleccionado.getId(), canalSeleccionado.getNombre(), texto);
         }
