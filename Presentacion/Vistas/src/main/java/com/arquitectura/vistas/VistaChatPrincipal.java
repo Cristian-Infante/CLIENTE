@@ -6,6 +6,7 @@ import com.arquitectura.controladores.ControladorChat;
 import com.arquitectura.entidades.CanalLocal;
 import com.arquitectura.entidades.ClienteLocal;
 import com.arquitectura.servicios.ServicioConexionChat;
+import com.arquitectura.servicios.ObservadorEventosChat;
 import com.arquitectura.infra.net.OyenteMensajesChat;
 import com.arquitectura.servicios.OyenteActualizacionMensajes;
 import com.arquitectura.servicios.ServicioEventosMensajes;
@@ -71,6 +72,8 @@ public class VistaChatPrincipal extends JFrame {
         this.chatController = new ControladorChat(usuarioActual, clienteTCP);
         this.canalController = new ControladorCanal(usuarioActual, clienteTCP);
         this.audioController = new ControladorAudio(usuarioActual, clienteTCP);
+
+        try { ObservadorEventosChat.instancia().registrarEn(clienteTCP); } catch (Exception ignored) {}
 
         inicializarComponentes();
         configurarVentana();
