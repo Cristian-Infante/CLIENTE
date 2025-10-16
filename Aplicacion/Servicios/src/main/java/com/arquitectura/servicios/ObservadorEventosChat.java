@@ -110,35 +110,51 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             java.util.Set<Long> privadosNotificar = new java.util.HashSet<>();
             int insertados = 0;
             for (String obj : objetos) {
-                String tipoMsg = extraerCampo(obj, "tipo");
-                Long emisor = extraerLong(obj, "emisor");
-                Long receptor = extraerLong(obj, "receptor");
-                Long canalId = extraerLong(obj, "canalId");
-                Long serverId = extraerLong(obj, "id");
-                java.sql.Timestamp serverTs = parseTimestamp(extraerCampo(obj, "timeStamp"));
-                boolean esCanal = canalId != null;
-                if ("AUDIO".equalsIgnoreCase(tipoMsg)) {
-                    String ruta = extraerCampo(obj, "rutaArchivo");
-                    String transcripcion = extraerCampo(obj, "transcripcion");
+                String tipoMsg = obtenerCampoTexto(obj, "tipo", "tipoMensaje");
+                Long emisor = obtenerCampoLong(obj, "emisor", "emisorId");
+                Long receptor = obtenerCampoLong(obj, "receptor", "receptorId");
+                Long canalId = obtenerCampoLong(obj, "canalId");
+                Long serverId = obtenerCampoLong(obj, "id");
+                java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(obj, "timeStamp", "timestamp"));
+                String tipoConversacion = obtenerCampoTexto(obj, "tipoConversacion");
+                boolean esCanal = canalId != null || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
+                boolean esAudio = "AUDIO".equalsIgnoreCase(tipoMsg);
+
+                String contenidoObjeto = extraerObjeto(obj, "contenido");
+                String contenidoPlano = obtenerCampoTextoPermitirNulo(obj, "contenido", "texto");
+                String ruta = obtenerCampoTexto(obj, "rutaArchivo");
+                String transcripcion = obtenerCampoTextoPermitirNulo(obj, "transcripcion");
+                if (contenidoObjeto != null) {
+                    if (esAudio) {
+                        String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
+                        if (rutaInterna != null) ruta = rutaInterna;
+                        String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion");
+                        if (transcripcionInterna != null || contieneCampo(contenidoObjeto, "transcripcion")) transcripcion = transcripcionInterna;
+                    } else {
+                        String contenidoInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "contenido", "texto");
+                        if (contenidoInterno != null || contieneCampo(contenidoObjeto, "contenido") || contieneCampo(contenidoObjeto, "texto")) contenidoPlano = contenidoInterno;
+                    }
+                }
+
+                if (esAudio) {
                     if (esCanal) {
-                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, transcripcion, "AUDIO", ruta);
+                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
                         if (idIns > 0) insertados++;
-                        canalesNotificar.add(canalId);
+                        if (canalId != null) canalesNotificar.add(canalId);
                     } else {
                         Long chatOtro = emisor != null ? emisor : receptor;
-                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, transcripcion, "AUDIO", ruta);
+                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
                         if (idIns > 0) insertados++;
                         if (chatOtro != null) privadosNotificar.add(chatOtro);
                     }
                 } else {
-                    String contenido = extraerCampoPermitirNulo(obj, "contenido");
                     if (esCanal) {
-                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, contenido != null ? contenido : "", "TEXTO");
+                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                         if (idIns > 0) insertados++;
-                        canalesNotificar.add(canalId);
+                        if (canalId != null) canalesNotificar.add(canalId);
                     } else {
                         Long chatOtro = emisor != null ? emisor : receptor;
-                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, contenido != null ? contenido : "", "TEXTO");
+                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                         if (idIns > 0) insertados++;
                         if (chatOtro != null) privadosNotificar.add(chatOtro);
                     }
@@ -160,36 +176,51 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             String command = extraerCampo(compact, "command");
             String payload = extraerObjetoPayload(compact);
             if (payload == null) payload = compact; // fallback
-            String tipoMsg = extraerCampo(payload, "tipo"); // TEXTO / AUDIO
-            Long emisor = extraerLong(payload, "emisor");
-            Long receptor = extraerLong(payload, "receptor");
-            Long canalId = extraerLong(payload, "canalId");
-            Long serverId = extraerLong(payload, "id");
-            java.sql.Timestamp serverTs = parseTimestamp(extraerCampo(payload, "timeStamp"));
-            boolean esCanal = "NEW_CHANNEL_MESSAGE".equalsIgnoreCase(command) || (canalId != null);
+            String tipoMsg = obtenerCampoTexto(payload, "tipo", "tipoMensaje"); // TEXTO / AUDIO
+            Long emisor = obtenerCampoLong(payload, "emisor", "emisorId");
+            Long receptor = obtenerCampoLong(payload, "receptor", "receptorId");
+            Long canalId = obtenerCampoLong(payload, "canalId");
+            Long serverId = obtenerCampoLong(payload, "id");
+            java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payload, "timeStamp", "timestamp"));
+            String tipoConversacion = obtenerCampoTexto(payload, "tipoConversacion");
+            boolean esCanal = "NEW_CHANNEL_MESSAGE".equalsIgnoreCase(command) || (canalId != null) || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
+            boolean esAudio = "AUDIO".equalsIgnoreCase(tipoMsg);
 
-            if ("AUDIO".equalsIgnoreCase(tipoMsg)) {
-                String ruta = extraerCampo(payload, "rutaArchivo");
-                String transcripcion = extraerCampo(payload, "transcripcion");
+            String contenidoObjeto = extraerObjeto(payload, "contenido");
+            String contenidoPlano = obtenerCampoTextoPermitirNulo(payload, "contenido", "texto");
+            String ruta = obtenerCampoTexto(payload, "rutaArchivo");
+            String transcripcion = obtenerCampoTextoPermitirNulo(payload, "transcripcion");
+            if (contenidoObjeto != null) {
+                if (esAudio) {
+                    String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
+                    if (rutaInterna != null) ruta = rutaInterna;
+                    String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion");
+                    if (transcripcionInterna != null || contieneCampo(contenidoObjeto, "transcripcion")) transcripcion = transcripcionInterna;
+                } else {
+                    String contenidoInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "contenido", "texto");
+                    if (contenidoInterno != null || contieneCampo(contenidoObjeto, "contenido") || contieneCampo(contenidoObjeto, "texto")) contenidoPlano = contenidoInterno;
+                }
+            }
+
+            if (esAudio) {
                 if (esCanal) {
-                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, transcripcion, "AUDIO", ruta);
+                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
                     System.out.println("[ObservadorEventosChat] Audio canal insertado id=" + id + " canal=" + canalId);
-                    ServicioEventosMensajes.instancia().notificarCanal(canalId);
+                    if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
                 } else {
                     Long chatOtro = emisor != null ? emisor : receptor; // notificar por el otro lado del privado
-                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, transcripcion, "AUDIO", ruta);
+                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
                     System.out.println("[ObservadorEventosChat] Audio privado insertado id=" + id + " receptor=" + receptor);
                     if (chatOtro != null) ServicioEventosMensajes.instancia().notificarPrivado(chatOtro);
                 }
             } else { // TEXTO u otros
-                String contenido = extraerCampoPermitirNulo(payload, "contenido");
                 if (esCanal) {
-                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, contenido != null ? contenido : "", "TEXTO");
+                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, null, canalId, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                     System.out.println("[ObservadorEventosChat] Texto canal insertado id=" + id + " canal=" + canalId);
-                    ServicioEventosMensajes.instancia().notificarCanal(canalId);
+                    if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
                 } else {
                     Long chatOtro = emisor != null ? emisor : receptor;
-                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, contenido != null ? contenido : "", "TEXTO");
+                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, receptor, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                     System.out.println("[ObservadorEventosChat] Texto privado insertado id=" + id + " receptor=" + receptor);
                     if (chatOtro != null) ServicioEventosMensajes.instancia().notificarPrivado(chatOtro);
                 }
@@ -199,6 +230,37 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         } catch (Exception e) {
             System.out.println("[ObservadorEventosChat] Error procesando evento: " + e + " json=" + json);
         }
+    }
+
+    private static String obtenerCampoTexto(String json, String... nombres) {
+        if (nombres == null) return null;
+        for (String nombre : nombres) {
+            if (nombre == null) continue;
+            String v = extraerCampo(json, nombre);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
+    private static String obtenerCampoTextoPermitirNulo(String json, String... nombres) {
+        if (nombres == null) return null;
+        for (String nombre : nombres) {
+            if (nombre == null) continue;
+            String v = extraerCampoPermitirNulo(json, nombre);
+            if (v != null) return v;
+            if (contieneCampo(json, nombre)) return null;
+        }
+        return null;
+    }
+
+    private static Long obtenerCampoLong(String json, String... nombres) {
+        if (nombres == null) return null;
+        for (String nombre : nombres) {
+            if (nombre == null) continue;
+            Long v = extraerLong(json, nombre);
+            if (v != null) return v;
+        }
+        return null;
     }
 
     private static String extraerCampo(String json, String campo) {
@@ -229,6 +291,11 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             if (m.find()) return Long.parseLong(m.group(1));
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private static boolean contieneCampo(String json, String campo) {
+        if (json == null || campo == null) return false;
+        return json.contains("\"" + campo + "\"");
     }
 
     private static String extraerObjetoPayload(String json) {
@@ -263,6 +330,31 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             }
         } catch (Exception ignored) {}
         return objs;
+    }
+
+    private static String extraerObjeto(String json, String campo) {
+        try {
+            int idx = json.indexOf("\"" + campo + "\"");
+            if (idx < 0) return null;
+            int start = json.indexOf('{', idx);
+            if (start < 0) return null;
+            int depth = 0;
+            boolean inString = false;
+            for (int i = start; i < json.length(); i++) {
+                char ch = json.charAt(i);
+                if (ch == '"' && (i == start || json.charAt(i - 1) != '\\')) {
+                    inString = !inString;
+                }
+                if (inString) continue;
+                if (ch == '{') {
+                    depth++;
+                } else if (ch == '}') {
+                    depth--;
+                    if (depth == 0) return json.substring(start, i + 1);
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private static java.sql.Timestamp parseTimestamp(String iso) {
