@@ -1,0 +1,94 @@
+package com.arquitectura.controladores;
+
+import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.repositorios.RepositorioMensajes;
+import com.arquitectura.servicios.ServicioConexionChat;
+import com.arquitectura.servicios.ServicioMensajes;
+
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.Collections;
+import java.util.List;
+
+public class ControladorChat {
+    private final ClienteLocal clienteActual;
+    private final ServicioMensajes servicioMensajes;
+
+    public ControladorChat(ClienteLocal clienteActual, ServicioConexionChat conexion) {
+        this.clienteActual = clienteActual;
+        this.servicioMensajes = new ServicioMensajes(new RepositorioMensajes(), conexion);
+    }
+
+    public boolean enviarMensajeUsuario(Long receptorId, String texto) {
+        try {
+            servicioMensajes.enviarTextoAPrivado(clienteActual.getId(), receptorId, texto, "TEXTO");
+            return true;
+        } catch (IOException e) {
+            return false; // error real de IO hacia servidor
+        } catch (SQLException e) {
+            // Fallo de persistencia local no debe impedir marcar envío como exitoso si ya se intentó enviar
+            return true;
+        }
+    }
+
+    public boolean enviarMensajeCanal(Long canalId, String nombreCanal, String texto) {
+        try {
+            servicioMensajes.enviarTextoACanal(clienteActual.getId(), canalId, texto, "TEXTO");
+            return true;
+        } catch (IOException e) {
+            return false;
+        } catch (SQLException e) {
+            return true;
+        }
+    }
+
+    public List<String> obtenerConversacion(Long usuarioId) {
+        try {
+            var repo = new com.arquitectura.repositorios.RepositorioMensajes();
+            java.util.List<com.arquitectura.entidades.MensajeLocal> msgs = repo.listarMensajesPrivados(clienteActual.getId(), usuarioId, null);
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            if (msgs != null) {
+                for (var m : msgs) {
+                    String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
+                    if (ts.length() > 5) ts = ts.substring(0, 5);
+                    boolean soyYo = m.getEmisor() != null && m.getEmisor().equals(clienteActual.getId());
+                    String prefix = soyYo ? "Yo" : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
+                    if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
+                        lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
+                    } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
+                        lines.add("[" + ts + "] " + prefix + ": [Audio] " + (a.getRutaArchivo() != null ? a.getRutaArchivo() : ""));
+                    } else {
+                        lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
+                    }
+                }
+            }
+            return lines;
+        } catch (Exception e) {
+            return java.util.List.of();
+        }
+    }
+
+    public List<String> obtenerMensajesCanal(Long canalId) {
+        try {
+            var repo = new com.arquitectura.repositorios.RepositorioMensajes();
+            java.util.List<com.arquitectura.entidades.MensajeLocal> msgs = repo.listarMensajesDeCanal(canalId, null);
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            if (msgs != null) {
+                for (var m : msgs) {
+                    String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
+                    if (ts.length() > 5) ts = ts.substring(0, 5);
+                    if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
+                        lines.add("[" + ts + "] #" + (m.getEmisor() != null ? m.getEmisor() : "?") + ": " + (t.getContenido() != null ? t.getContenido() : ""));
+                    } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
+                        lines.add("[" + ts + "] #" + (m.getEmisor() != null ? m.getEmisor() : "?") + ": [Audio] " + (a.getRutaArchivo() != null ? a.getRutaArchivo() : ""));
+                    } else {
+                        lines.add("[" + ts + "] #" + (m.getEmisor() != null ? m.getEmisor() : "?") + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
+                    }
+                }
+            }
+            return lines;
+        } catch (Exception e) {
+            return java.util.List.of();
+        }
+    }
+}

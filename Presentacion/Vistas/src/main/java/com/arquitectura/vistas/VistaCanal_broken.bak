@@ -1,0 +1,446 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+package com.arquitectura.vistas;
+
+/**
+ *
+ * @author Mariana
+ */
+import com.arquitectura.controladores.ControladorCanal;
+import com.arquitectura.entidades.CanalLocal;
+import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.servicios.ServicioConexionChat;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.util.List;
+
+/**
+ * Vista para gestionar canales
+ */
+public class VistaCanal extends JFrame {
+    private ClienteLocal usuarioActual;
+    private ServicioConexionChat clienteTCP;
+    private ControladorCanal canalController;
+    
+    // Componentes
+    private JTabbedPane tabbedPane;
+    
+    // Tab Mis Canales
+    private DefaultListModel<CanalLocal> modeloMisCanales;
+    private JList<CanalLocal> listaMisCanales;
+    private JButton btnAbandonarCanal;
+    private JButton btnEliminarCanal;
+    private JButton btnInvitarUsuario;
+    
+    // Tab Crear Canal
+    private JTextField txtNombreCanal;
+    private JTextArea txtDescripcion;
+    private JButton btnCrearCanal;
+    
+    // Tab Todos los Canales
+    private DefaultListModel<CanalLocal> modeloTodosCanales;
+    private JList<CanalLocal> listaTodosCanales;
+    private JTextField txtBuscarCanal;
+    private JButton btnActualizar;
+    
+    public VistaCanal (ClienteLocal usuario, ServicioConexionChat clienteTCP) {
+        this.usuarioActual = usuario;
+        this.clienteTCP = clienteTCP;
+        this.canalController = new ControladorCanal(usuarioActual, clienteTCP);
+        
+        inicializarComponentes();
+        configurarVentana();
+        cargarDatos();
+    }
+    
+    private void inicializarComponentes() {
+        tabbedPane = new JTabbedPane();
+        
+        // Tab Mis Canales
+        tabbedPane.addTab("Mis Canales", crearPanelMisCanales());
+        
+        // Tab Crear Canal
+        tabbedPane.addTab("Crear Canal", crearPanelCrearCanal());
+        
+        // Tab Todos los Canales
+        tabbedPane.addTab("Explorar", crearPanelTodosCanales());
+        
+        add(tabbedPane);
+    }
+    
+    private JPanel crearPanelMisCanales() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        
+        // Título
+        JLabel lblTitulo = new JLabel("Mis Canales");
+        lblTitulo.setFont(new Font("Arial", Font.BOLD, 18));
+        panel.add(lblTitulo, BorderLayout.NORTH);
+        
+        // Lista de canales
+        modeloMisCanales = new DefaultListModel<>();
+        listaMisCanales = new JList<>(modeloMisCanales);
+        listaMisCanales.setCellRenderer(new CanalListRenderer());
+        listaMisCanales.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        
+        JScrollPane scrollCanales = new JScrollPane(listaMisCanales);
+        panel.add(scrollCanales, BorderLayout.CENTER);
+        
+        // Panel de botones
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        
+        btnInvitarUsuario = new JButton("Invitar Usuario");
+        btnInvitarUsuario.addActionListener(e -> invitarUsuario());
+        
+        btnAbandonarCanal = new JButton("Abandonar");
+        btnAbandonarCanal.addActionListener(e -> abandonarCanal());
+        
+        btnEliminarCanal = new JButton("Eliminar Canal");
+        btnEliminarCanal.setForeground(Color.RED);
+        btnEliminarCanal.addActionListener(e -> eliminarCanal());
+        
+        panelBotones.add(btnInvitarUsuario);
+        panelBotones.add(btnAbandonarCanal);
+        panelBotones.add(btnEliminarCanal);
+        
+        panel.add(panelBotones, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+    
+    private JPanel crearPanelCrearCanal() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        
+        int row = 0;
+        
+        // Título
+        JLabel lblTitulo = new JLabel("Crear Nuevo Canal");
+        lblTitulo.setFont(new Font("Arial", Font.BOLD, 18));
+        gbc.gridx = 0;
+        gbc.gridy = row++;
+        gbc.gridwidth = 2;
+        panel.add(lblTitulo, gbc);
+        
+        gbc.gridwidth = 1;
+        
+        // Nombre del canal
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        panel.add(new JLabel("Nombre del Canal:"), gbc);
+        
+        gbc.gridx = 1;
+        txtNombreCanal = new JTextField(25);
+        panel.add(txtNombreCanal, gbc);
+        row++;
+        
+        // Descripción
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        gbc.anchor = GridBagConstraints.NORTH;
+        panel.add(new JLabel("Descripción:"), gbc);
+        
+        gbc.gridx = 1;
+        gbc.anchor = GridBagConstraints.CENTER;
+        txtDescripcion = new JTextArea(5, 25);
+        txtDescripcion.setLineWrap(true);
+        txtDescripcion.setWrapStyleWord(true);
+        JScrollPane scrollDescripcion = new JScrollPane(txtDescripcion);
+        panel.add(scrollDescripcion, gbc);
+        row++;
+        
+        // Información
+        gbc.gridx = 0;
+        gbc.gridy = row++;
+        gbc.gridwidth = 2;
+        JLabel lblInfo = new JLabel("<html><i>Los canales son privados. Deberás invitar a los usuarios.</i></html>");
+        lblInfo.setForeground(Color.GRAY);
+        panel.add(lblInfo, gbc);
+        
+        // Botón crear
+        gbc.gridy = row;
+        btnCrearCanal = new JButton("Crear Canal");
+        btnCrearCanal.setPreferredSize(new Dimension(150, 35));
+        btnCrearCanal.addActionListener(e -> crearCanal());
+        
+        JPanel panelBoton = new JPanel();
+        panelBoton.add(btnCrearCanal);
+        panel.add(panelBoton, gbc);
+        
+        return panel;
+    }
+    
+    private JPanel crearPanelTodosCanales() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        
+        // Panel superior con búsqueda
+        JPanel panelSuperior = new JPanel(new BorderLayout(5, 5));
+        
+        JLabel lblTitulo = new JLabel("Todos los Canales");
+        lblTitulo.setFont(new Font("Arial", Font.BOLD, 18));
+        panelSuperior.add(lblTitulo, BorderLayout.NORTH);
+        
+        JPanel panelBuscar = new JPanel(new BorderLayout(5, 5));
+        panelBuscar.add(new JLabel("🔍"), BorderLayout.WEST);
+        
+        txtBuscarCanal = new JTextField();
+        txtBuscarCanal.addActionListener(e -> buscarCanales());
+        panelBuscar.add(txtBuscarCanal, BorderLayout.CENTER);
+        
+        btnActualizar = new JButton("🔄");
+        btnActualizar.addActionListener(e -> cargarTodosLosCanales());
+        panelBuscar.add(btnActualizar, BorderLayout.EAST);
+        
+        panelSuperior.add(panelBuscar, BorderLayout.CENTER);
+        panel.add(panelSuperior, BorderLayout.NORTH);
+        
+        // Lista de canales
+        modeloTodosCanales = new DefaultListModel<>();
+        listaTodosCanales = new JList<>(modeloTodosCanales);
+        listaTodosCanales.setCellRenderer(new CanalListRenderer());
+        
+        JScrollPane scrollCanales = new JScrollPane(listaTodosCanales);
+        panel.add(scrollCanales, BorderLayout.CENTER);
+        
+        // Información
+        JLabel lblInfo = new JLabel("<html><i>Aquí puedes ver todos los canales de la universidad. " +
+                                    "Para unirte, necesitas una invitación.</i></html>");
+        lblInfo.setForeground(Color.GRAY);
+        panel.add(lblInfo, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+    
+    private void cargarDatos() {
+        cargarMisCanales();
+        cargarTodosLosCanales();
+    }
+    
+    private void cargarMisCanales() {
+        new Thread(() -> {
+            List<CanalLocal> canales = canalController.obtenerMisCanales();
+            SwingUtilities.invokeLater(() -> {
+                modeloMisCanales.clear();
+                for (Canal c : canales) {
+                    modeloMisCanales.addElement(c);
+                }
+            });
+        }).start();
+    }
+    
+    private void cargarTodosLosCanales() {
+        new Thread(() -> {
+            List<Canal> canales = canalController.obtenerTodosLosCanales();
+            SwingUtilities.invokeLater(() -> {
+                modeloTodosCanales.clear();
+                for (Canal c : canales) {
+                    modeloTodosCanales.addElement(c);
+                }
+            });
+        }).start();
+    }
+    
+    private void crearCanal() {
+        String nombre = txtNombreCanal.getText().trim();
+        String descripcion = txtDescripcion.getText().trim();
+        
+        if (nombre.isEmpty()) {
+            JOptionPane.showMessageDialog(this, 
+                "El nombre del canal es obligatorio", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        boolean creado = canalController.crearCanal(nombre, descripcion);
+        
+        if (creado) {
+            JOptionPane.showMessageDialog(this, 
+                "Canal creado exitosamente", 
+                "Éxito", 
+                JOptionPane.INFORMATION_MESSAGE);
+            
+            txtNombreCanal.setText("");
+            txtDescripcion.setText("");
+            cargarMisCanales();
+            tabbedPane.setSelectedIndex(0);
+        } else {
+            JOptionPane.showMessageDialog(this, 
+                "Error al crear el canal", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void invitarUsuario() { JOptionPane.showMessageDialog(this, "Invitaci�n no implementada a�n.", "Info", JOptionPane.INFORMATION_MESSAGE); }
+        
+        // Obtener lista de usuarios
+        List<Usuario> usuarios = usuarioDAO.obtenerTodos();
+        usuarios.removeIf(u -> u.getId().equals(usuarioActual.getId()));
+        
+        if (usuarios.isEmpty()) {
+            JOptionPane.showMessageDialog(this, 
+                "No hay usuarios disponibles para invitar", 
+                "Información", 
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        // Crear diálogo de selección
+        String[] nombresUsuarios = usuarios.stream()
+            .map(Usuario::getNombreUsuario)
+            .toArray(String[]::new);
+        
+        String seleccion = (String) JOptionPane.showInputDialog(
+            this,
+            "Seleccione un usuario para invitar:",
+            "Invitar Usuario",
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            nombresUsuarios,
+            nombresUsuarios[0]
+        );
+        
+        if (seleccion != null) {
+            Usuario usuarioInvitado = usuarios.stream()
+                .filter(u -> u.getNombreUsuario().equals(seleccion))
+                .findFirst()
+                .orElse(null);
+            
+            if (usuarioInvitado != null) {
+                String mensaje = JOptionPane.showInputDialog(
+                    this,
+                    "Mensaje para " + seleccion + ":",
+                    "Te invito a unirte al canal " + canalSeleccionado.getNombre()
+                );
+                
+                if (mensaje != null) {
+                    boolean enviado = canalController.invitarUsuarioACanal(
+                        canalSeleccionado.getId(),
+                        usuarioInvitado.getId(),
+                        mensaje
+                    );
+                    
+                    if (enviado) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Invitación enviada exitosamente", 
+                            "Éxito", 
+                            JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(this, 
+                            "Error al enviar la invitación", 
+                            "Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            }
+        }
+    }
+    
+    private void abandonarCanal() { JOptionPane.showMessageDialog(this, "Abandonar canal no implementado.", "Info", JOptionPane.INFORMATION_MESSAGE); }
+        
+        if (canalSeleccionado.getIdCreador().equals(usuarioActual.getId())) {
+            JOptionPane.showMessageDialog(this, 
+                "No puedes abandonar un canal que creaste.\nUsa 'Eliminar Canal' si deseas eliminarlo.", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        int opcion = JOptionPane.showConfirmDialog(
+            this,
+            "¿Está seguro que desea abandonar el canal '" + canalSeleccionado.getNombre() + "'?",
+            "Confirmar",
+            JOptionPane.YES_NO_OPTION
+        );
+        
+        if (opcion == JOptionPane.YES_OPTION) {
+            boolean abandonado = canalController.abandonarCanal(canalSeleccionado.getId());
+            
+            if (abandonado) {
+                JOptionPane.showMessageDialog(this, 
+                    "Has abandonado el canal", 
+                    "Éxito", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                cargarMisCanales();
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Error al abandonar el canal", 
+                    "Error", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void eliminarCanal() { JOptionPane.showMessageDialog(this, "Eliminar canal no implementado.", "Info", JOptionPane.INFORMATION_MESSAGE); }
+        
+        if (!canalSeleccionado.getIdCreador().equals(usuarioActual.getId())) {
+            JOptionPane.showMessageDialog(this, 
+                "Solo el creador puede eliminar el canal", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        int opcion = JOptionPane.showConfirmDialog(
+            this,
+            "¿Está seguro que desea ELIMINAR el canal '" + canalSeleccionado.getNombre() + "'?\n" +
+            "Esta acción no se puede deshacer.",
+            "Confirmar Eliminación",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
+        
+        if (opcion == JOptionPane.YES_OPTION) {
+            boolean eliminado = canalController.eliminarCanal(canalSeleccionado.getId());
+            
+            if (eliminado) {
+                JOptionPane.showMessageDialog(this, 
+                        "Canal eliminado exitosamente",
+                        "Éxito",
+                        JOptionPane.INFORMATION_MESSAGE);
+                cargarMisCanales();
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Error al eliminar el canal",
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void buscarCanales() {
+        String texto = txtBuscarCanal.getText().trim();
+        if (texto.isEmpty()) {
+            cargarTodosLosCanales();
+            return;
+        }
+
+        new Thread(() -> {
+            List<Canal> resultado = canalController.buscarCanales(texto);
+            SwingUtilities.invokeLater(() -> {
+                modeloTodosCanales.clear();
+                for (Canal c : resultado) {
+                    modeloTodosCanales.addElement(c);
+                }
+            });
+        }).start();
+    }
+
+    private void configurarVentana() {
+        setTitle("Gestión de Canales");
+        setSize(600, 500);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setLocationRelativeTo(null);
+    }
+
+    // Renderer personalizado para la lista de canales
+    static class CanalListRenderer extends DefaultListCellRenderer { @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) { super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus); if (value instanceof com.arquitectura.entidades.CanalLocal c) { setText(c.getNombre()); } return this; } } }

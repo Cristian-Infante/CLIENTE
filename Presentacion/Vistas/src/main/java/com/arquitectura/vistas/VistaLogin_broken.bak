@@ -1,0 +1,432 @@
+
+package com.arquitectura.vistas;
+
+
+import com.arquitectura.controladores.ControladorLogin;
+import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.servicios.ServicioConexionChat;
+import javax.swing.*;
+import java.awt.*;
+import java.io.File;
+import java.nio.file.Files;
+
+/** * Vista de Inicio de Sesión y Registro 
+ */
+public class VistaLogin extends JFrame { // Cambiado de LoginView
+    
+    private ControladorLogin controladorLogin; // Cambiado de LoginController
+    
+    // Componentes
+    private JTabbedPane panelPestanas; // Cambiado de tabbedPane
+    
+    // Inicio de Sesión (Login)
+    private JTextField campoUsuarioLogin; // Cambiado de txtUsuarioLogin
+    private JPasswordField campoContrasenaLogin; // Cambiado de txtPasswordLogin
+    private JButton botonIniciarSesion; // Cambiado de btnLogin
+    private JButton botonSalir; // Cambiado de btnSalir
+    
+    // Registro
+    private JTextField campoUsuarioRegistro; // Cambiado de txtUsuarioRegistro
+    private JTextField campoEmailRegistro; // Cambiado de txtEmailRegistro
+    private JPasswordField campoContrasenaRegistro; // Cambiado de txtPasswordRegistro
+    private JPasswordField campoConfirmarContrasena; // Cambiado de txtConfirmarPassword
+    private JButton botonSeleccionarFoto; // Cambiado de btnSeleccionarFoto
+    private JLabel etiquetaFotoPreview; // Cambiado de lblFotoPreview
+    private JButton botonRegistrar; // Cambiado de btnRegistrar
+    private byte[] bytesFoto; // Cambiado de fotoBytes
+    
+    // Estado
+    private JLabel etiquetaEstado; // Cambiado de lblEstado
+    
+    public VistaLogin() { // Cambiado de LoginView
+        this.controladorLogin = new ControladorLogin(); // Usando clase traducida
+        inicializarComponentes();
+        configurarVentana();
+    }
+    
+    private void inicializarComponentes() {
+        // JTabbedPane para Inicio de Sesión y Registro
+        panelPestanas = new JTabbedPane();
+        
+        // Panel de Inicio de Sesión
+        JPanel panelLogin = crearPanelInicioSesion();
+        panelPestanas.addTab("Iniciar Sesión", panelLogin);
+        
+        // Panel de Registro
+        JPanel panelRegistro = crearPanelRegistro();
+        panelPestanas.addTab("Registrarse", panelRegistro);
+        
+        // Etiqueta de estado
+        etiquetaEstado = new JLabel(" ");
+        etiquetaEstado.setHorizontalAlignment(SwingConstants.CENTER);
+        etiquetaEstado.setForeground(Color.RED);
+        
+        // Layout principal
+        setLayout(new BorderLayout(10, 10));
+        add(panelPestanas, BorderLayout.CENTER);
+        add(etiquetaEstado, BorderLayout.SOUTH);
+    }
+    
+    private JPanel crearPanelInicioSesion() { // Cambiado de crearPanelLogin
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        
+        // Título
+        JLabel etiquetaTitulo = new JLabel("Chat Universitario");
+        etiquetaTitulo.setFont(new Font("Arial", Font.BOLD, 24));
+        etiquetaTitulo.setHorizontalAlignment(SwingConstants.CENTER);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        panel.add(etiquetaTitulo, gbc);
+        
+        gbc.gridwidth = 1;
+        
+        // Usuario
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        panel.add(new JLabel("Usuario:"), gbc);
+        
+        gbc.gridx = 1;
+        campoUsuarioLogin = new JTextField(20);
+        panel.add(campoUsuarioLogin, gbc);
+        
+        // Contraseña
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        panel.add(new JLabel("Contraseña:"), gbc);
+        
+        gbc.gridx = 1;
+        campoContrasenaLogin = new JPasswordField(20);
+        panel.add(campoContrasenaLogin, gbc);
+        
+        // Botones
+        JPanel panelBotones = new JPanel(new FlowLayout());
+        botonIniciarSesion = new JButton("Iniciar Sesión");
+        botonIniciarSesion.setPreferredSize(new Dimension(130, 30));
+        botonIniciarSesion.addActionListener(e -> ejecutarInicioSesion()); // Usando método traducido
+        
+        botonSalir = new JButton("Salir");
+        botonSalir.setPreferredSize(new Dimension(100, 30));
+        botonSalir.addActionListener(e -> System.exit(0));
+        
+        panelBotones.add(botonIniciarSesion);
+        JButton btnPing = new JButton("Probar conexión");
+        btnPing.setPreferredSize(new Dimension(150, 30));
+        btnPing.addActionListener(e -> probarConexion());
+        panelBotones.add(btnPing);
+        panelBotones.add(botonSalir);
+        
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 2;
+        panel.add(panelBotones, gbc);
+        
+        // Enter para login
+        campoContrasenaLogin.addActionListener(e -> ejecutarInicioSesion()); // Usando método traducido
+        
+        return panel;
+    }
+    
+    private JPanel crearPanelRegistro() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        
+        int fila = 0; // Cambiado de row
+        
+        // Título
+        JLabel etiquetaTitulo = new JLabel("Crear Cuenta Nueva");
+        etiquetaTitulo.setFont(new Font("Arial", Font.BOLD, 18));
+        etiquetaTitulo.setHorizontalAlignment(SwingConstants.CENTER);
+        gbc.gridx = 0;
+        gbc.gridy = fila++;
+        gbc.gridwidth = 2;
+        panel.add(etiquetaTitulo, gbc);
+        
+        gbc.gridwidth = 1;
+        
+        // Usuario
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        panel.add(new JLabel("Usuario:"), gbc);
+        
+        gbc.gridx = 1;
+        campoUsuarioRegistro = new JTextField(20);
+        panel.add(campoUsuarioRegistro, gbc);
+        fila++;
+        
+        // Email
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        panel.add(new JLabel("Email:"), gbc);
+        
+        gbc.gridx = 1;
+        campoEmailRegistro = new JTextField(20);
+        panel.add(campoEmailRegistro, gbc);
+        fila++;
+        
+        // Contraseña
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        panel.add(new JLabel("Contraseña:"), gbc);
+        
+        gbc.gridx = 1;
+        campoContrasenaRegistro = new JPasswordField(20);
+        panel.add(campoContrasenaRegistro, gbc);
+        fila++;
+        
+        // Confirmar contraseña
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        panel.add(new JLabel("Confirmar:"), gbc);
+        
+        gbc.gridx = 1;
+        campoConfirmarContrasena = new JPasswordField(20);
+        panel.add(campoConfirmarContrasena, gbc);
+        fila++;
+        
+        // Foto
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        panel.add(new JLabel("Foto (opcional):"), gbc);
+        
+        gbc.gridx = 1;
+        JPanel panelFoto = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        botonSeleccionarFoto = new JButton("Seleccionar");
+        botonSeleccionarFoto.addActionListener(e -> seleccionarFoto());
+        panelFoto.add(botonSeleccionarFoto);
+        
+        etiquetaFotoPreview = new JLabel("Sin foto");
+        etiquetaFotoPreview.setPreferredSize(new Dimension(50, 50));
+        etiquetaFotoPreview.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        panelFoto.add(etiquetaFotoPreview);
+        
+        panel.add(panelFoto, gbc);
+        fila++;
+        
+        // Botón registrar
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        gbc.gridwidth = 2;
+        botonRegistrar = new JButton("Registrarse");
+        botonRegistrar.setPreferredSize(new Dimension(150, 35));
+        botonRegistrar.addActionListener(e -> ejecutarRegistro()); // Usando método traducido
+        
+        JPanel panelBoton = new JPanel();
+        panelBoton.add(botonRegistrar);
+        panel.add(panelBoton, gbc);
+        
+        return panel;
+    }
+    
+    private void ejecutarInicioSesion() { // Cambiado de realizarLogin
+        String usuario = campoUsuarioLogin.getText().trim();
+        String contrasena = new String(campoContrasenaLogin.getPassword()); // Cambiado de password
+        
+        if (usuario.isEmpty() || contrasena.isEmpty()) {
+            mostrarError("Por favor complete todos los campos");
+            return;
+        }
+        
+        // Deshabilitar botón y mostrar progreso
+        botonIniciarSesion.setEnabled(false);
+        etiquetaEstado.setText("Conectando...");
+        etiquetaEstado.setForeground(Color.BLUE);
+        
+        // Realizar login en hilo separado
+        new Thread(() -> {
+            boolean exitoso = controladorLogin.iniciarSesion(usuario, contrasena); // Usando método traducido
+            
+            SwingUtilities.invokeLater(() -> {
+                botonIniciarSesion.setEnabled(true);
+                
+                if (exitoso) {
+                    mostrarExito("Login exitoso");
+                    abrirVentanaPrincipal();
+                } else {
+                    mostrarError("Usuario o contraseña incorrectos");
+                }
+            });
+        }).start();
+    }
+    
+    private void ejecutarRegistro() { // Cambiado de realizarRegistro
+        String usuario = campoUsuarioRegistro.getText().trim();
+        String email = campoEmailRegistro.getText().trim();
+        String contrasena = new String(campoContrasenaRegistro.getPassword()); // Cambiado de password
+        String confirmar = new String(campoConfirmarContrasena.getPassword()); // Cambiado de confirmar
+        
+        // Validaciones
+        if (usuario.isEmpty() || email.isEmpty() || contrasena.isEmpty()) {
+            mostrarError("Por favor complete todos los campos obligatorios");
+            return;
+        }
+        
+        if (!contrasena.equals(confirmar)) {
+            mostrarError("Las contraseñas no coinciden");
+            return;
+        }
+        
+        if (contrasena.length() < 6) {
+            mostrarError("La contraseña debe tener al menos 6 caracteres");
+            return;
+        }
+        
+        if (!email.contains("@") || !email.contains(".")) {
+            mostrarError("Email inválido");
+            return;
+        }
+        
+        // Deshabilitar botón
+        botonRegistrar.setEnabled(false);
+        etiquetaEstado.setText("Registrando...");
+        etiquetaEstado.setForeground(Color.BLUE);
+        
+        // Realizar registro en hilo separado
+        new Thread(() -> {
+            boolean exitoso = controladorLogin.registrar(usuario, email, contrasena, bytesFoto); // Usando método traducido y variable traducida
+            
+            SwingUtilities.invokeLater(() -> {
+                botonRegistrar.setEnabled(true);
+                
+                if (exitoso) {
+                    mostrarExito("Registro exitoso. Ahora puede iniciar sesión");
+                    limpiarFormularioRegistro();
+                    panelPestanas.setSelectedIndex(0); // Cambiar a pestaña login
+                } else {
+                    mostrarError("Error en el registro. El usuario o email ya existe");
+                }
+            });
+        }).start();
+    }
+    
+    private void seleccionarFoto() {
+        JFileChooser selectorArchivos = new JFileChooser(); // Cambiado de fileChooser
+        selectorArchivos.setFileFilter(new javax.swing.filechooser.FileFilter() {
+            public boolean accept(File f) {
+                return f.isDirectory() ||
+                       f.getName().toLowerCase().endsWith(".jpg") ||
+                       f.getName().toLowerCase().endsWith(".jpeg") ||
+                       f.getName().toLowerCase().endsWith(".png");
+            }
+            public String getDescription() {
+                return "Imágenes (*.jpg, *.jpeg, *.png)";
+            }
+        });
+        
+        int resultado = selectorArchivos.showOpenDialog(this);
+        
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivo = selectorArchivos.getSelectedFile();
+            try {
+                bytesFoto = Files.readAllBytes(archivo.toPath()); // Cambiado de fotoBytes
+                
+                // Mostrar preview
+                ImageIcon icono = new ImageIcon(bytesFoto);
+                Image img = icono.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+                etiquetaFotoPreview.setIcon(new ImageIcon(img)); // Cambiado de lblFotoPreview
+                etiquetaFotoPreview.setText(""); // Cambiado de lblFotoPreview
+                
+                mostrarExito("Foto seleccionada: " + archivo.getName());
+                
+            } catch (Exception e) {
+                mostrarError("Error al cargar la foto");
+            }
+        }
+    }
+    
+    private void abrirVentanaPrincipal() {
+        ClienteLocal usuarioActual = controladorLogin.getClienteSesion(); // Usando método traducido
+        
+        // Cerrar ventana de login
+        dispose();
+        
+        // Abrir ventana principal
+        SwingUtilities.invokeLater(() -> {
+            // Se asume que MainChatView también ha sido traducida
+            ServicioConexionChat conexion = controladorLogin.getServicioConexion();
+            VistaChatPrincipal mainView = new VistaChatPrincipal(usuarioActual, conexion); 
+            mainView.setVisible(true);
+        });
+    }
+    
+    private void limpiarFormularioRegistro() {
+        campoUsuarioRegistro.setText("");
+        campoEmailRegistro.setText("");
+        campoContrasenaRegistro.setText("");
+        campoConfirmarContrasena.setText("");
+        bytesFoto = null;
+        etiquetaFotoPreview.setIcon(null);
+        etiquetaFotoPreview.setText("Sin foto");
+    }
+    
+    private void mostrarError(String mensaje) {
+        etiquetaEstado.setText(mensaje);
+        etiquetaEstado.setForeground(Color.RED);
+    }
+    
+    private void mostrarExito(String mensaje) {
+        etiquetaEstado.setText(mensaje);
+        etiquetaEstado.setForeground(new Color(0, 150, 0));
+    }
+    
+    private void configurarVentana() {
+        setTitle("Chat Universitario - Inicio de Sesión");
+        setSize(450, 400);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
+        
+        // Icono de la ventana (opcional)
+        try {
+            // setIconImage(new ImageIcon("resources/icon.png").getImage());
+        } catch (Exception e) {
+            // Icono no disponible
+        }
+    }
+    
+    public static void main(String[] args) {
+        // Configurar Look and Feel
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        SwingUtilities.invokeLater(() -> {
+            VistaLogin vistaLogin = new VistaLogin();
+            vistaLogin.setVisible(true);
+        });
+    }
+}
+    private void probarConexion() {
+        etiquetaEstado.setText("Probando conexi�n...");
+        etiquetaEstado.setForeground(Color.BLUE);
+        new Thread(() -> {
+            boolean ok;
+            try {
+                ServicioConexionChat sc = controladorLogin.getServicioConexion();
+                if (!sc.estaConectado()) sc.conectar();
+                com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(sc);
+                ok = comandos.ping();
+            } catch (Exception ex) {
+                ok = false;
+            }
+            boolean res = ok;
+            SwingUtilities.invokeLater(() -> {
+                if (res) {
+                    etiquetaEstado.setForeground(new Color(0,150,0));
+                    etiquetaEstado.setText("Conectado (PONG)");
+                } else {
+                    etiquetaEstado.setForeground(Color.RED);
+                    etiquetaEstado.setText("No se pudo conectar");
+                }
+            });
+        }).start();
+    }

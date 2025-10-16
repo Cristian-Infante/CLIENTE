@@ -1,0 +1,4 @@
+com\arquitectura\infra\config\ConfiguracionClienteChat.class
+com\arquitectura\infra\net\ClienteChatTcp.class
+com\arquitectura\infra\net\OyenteMensajesChat.class
+com\arquitectura\infra\net\ProtocoloChat.class
