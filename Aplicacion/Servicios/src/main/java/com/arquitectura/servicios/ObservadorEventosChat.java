@@ -144,10 +144,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                         if (idIns > 0) insertados++;
                         if (canalId != null) canalesNotificar.add(canalId);
                     } else {
-                        Long chatOtro = emisor != null ? emisor : receptor;
                         long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
                         if (idIns > 0) insertados++;
-                        if (chatOtro != null) privadosNotificar.add(chatOtro);
+                        if (emisor != null) privadosNotificar.add(emisor);
+                        if (receptor != null) privadosNotificar.add(receptor);
                     }
                 } else {
                     if (esCanal) {
@@ -155,10 +155,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                         if (idIns > 0) insertados++;
                         if (canalId != null) canalesNotificar.add(canalId);
                     } else {
-                        Long chatOtro = emisor != null ? emisor : receptor;
                         long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                         if (idIns > 0) insertados++;
-                        if (chatOtro != null) privadosNotificar.add(chatOtro);
+                        if (emisor != null) privadosNotificar.add(emisor);
+                        if (receptor != null) privadosNotificar.add(receptor);
                     }
                 }
             }
@@ -212,10 +212,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                     System.out.println("[ObservadorEventosChat] Audio canal insertado id=" + id + " canal=" + canalId);
                     if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
                 } else {
-                    Long chatOtro = emisor != null ? emisor : receptor; // notificar por el otro lado del privado
                     long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
                     System.out.println("[ObservadorEventosChat] Audio privado insertado id=" + id + " receptor=" + receptor);
-                    if (chatOtro != null) ServicioEventosMensajes.instancia().notificarPrivado(chatOtro);
+                    if (emisor != null) ServicioEventosMensajes.instancia().notificarPrivado(emisor);
+                    if (receptor != null && !receptor.equals(emisor)) ServicioEventosMensajes.instancia().notificarPrivado(receptor);
                 }
             } else { // TEXTO u otros
                 if (esCanal) {
@@ -223,10 +223,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                     System.out.println("[ObservadorEventosChat] Texto canal insertado id=" + id + " canal=" + canalId);
                     if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
                 } else {
-                    Long chatOtro = emisor != null ? emisor : receptor;
                     long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                     System.out.println("[ObservadorEventosChat] Texto privado insertado id=" + id + " receptor=" + receptor);
-                    if (chatOtro != null) ServicioEventosMensajes.instancia().notificarPrivado(chatOtro);
+                    if (emisor != null) ServicioEventosMensajes.instancia().notificarPrivado(emisor);
+                    if (receptor != null && !receptor.equals(emisor)) ServicioEventosMensajes.instancia().notificarPrivado(receptor);
                 }
             }
         } catch (SQLException e) {
