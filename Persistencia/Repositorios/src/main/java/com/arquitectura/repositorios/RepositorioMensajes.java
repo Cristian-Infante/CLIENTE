@@ -326,22 +326,87 @@ public class RepositorioMensajes {
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) continue;
                     long id = rs.getLong(1);
-                    try (PreparedStatement up = cn.prepareStatement(
-                            "UPDATE mensajes SET server_id = ?, server_ts = ?, emisor_nombre = COALESCE(emisor_nombre, ?), receptor_nombre = COALESCE(receptor_nombre, ?), texto = COALESCE(texto, ?), audio_base64 = COALESCE(audio_base64, ?), audio_mime = COALESCE(audio_mime, ?), audio_duracion_seg = COALESCE(audio_duracion_seg, ?) WHERE id = ?")) {
-                        up.setLong(1, serverId);
-                        if (serverTs != null) up.setTimestamp(2, serverTs); else up.setNull(2, Types.TIMESTAMP);
-                        if (emisorNombre != null) up.setString(3, emisorNombre); else up.setNull(3, Types.VARCHAR);
-                        if (receptorNombre != null) up.setString(4, receptorNombre); else up.setNull(4, Types.VARCHAR);
-                        if (texto != null) up.setString(5, texto); else up.setNull(5, Types.CLOB);
-                        if (audioBase64 != null) up.setString(6, audioBase64); else up.setNull(6, Types.CLOB);
-                        if (mime != null) up.setString(7, mime); else up.setNull(7, Types.VARCHAR);
-                        if (duracionSeg != null) up.setInt(8, duracionSeg); else up.setNull(8, Types.INTEGER);
-                        up.setLong(9, id);
-                        return up.executeUpdate() > 0;
+                    if (actualizarMensajeCoincidente(cn, id, serverId, serverTs, emisorNombre, receptorNombre, texto, audioBase64, mime, duracionSeg)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        if (esAudio && rutaArchivo != null && !rutaArchivo.isBlank()) {
+            return intentarActualizarCoincidenciaLocalPorRutaNormalizada(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, texto, rutaArchivo, audioBase64, mime, duracionSeg);
+        }
+        return false;
+    }
+
+    private boolean intentarActualizarCoincidenciaLocalPorRutaNormalizada(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String texto, String rutaArchivo, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
+        String rutaNormalizada = normalizarRuta(rutaArchivo);
+        if (rutaNormalizada == null || rutaNormalizada.isEmpty()) return false;
+
+        StringBuilder sql = new StringBuilder("SELECT id, ruta_audio FROM mensajes WHERE server_id IS NULL AND emisor_id = ? AND ");
+        if (receptorId != null) {
+            sql.append("receptor_id = ? AND ");
+        } else {
+            sql.append("receptor_id IS NULL AND ");
+        }
+        if (canalId != null) {
+            sql.append("canal_id = ? AND ");
+        } else {
+            sql.append("canal_id IS NULL AND ");
+        }
+        sql.append("es_audio = ? ORDER BY fecha_envio DESC LIMIT 5");
+
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
+             PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+            int idx = 1;
+            ps.setLong(idx++, emisorId != null ? emisorId : 0L);
+            if (receptorId != null) ps.setLong(idx++, receptorId);
+            if (canalId != null) ps.setLong(idx++, canalId);
+            ps.setBoolean(idx++, true);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long id = rs.getLong(1);
+                    String rutaLocal = rs.getString(2);
+                    if (rutaLocal == null || rutaLocal.isBlank()) continue;
+                    String rutaLocalNorm = normalizarRuta(rutaLocal);
+                    if (rutaLocalNorm == null) continue;
+                    if (rutaLocalNorm.equalsIgnoreCase(rutaNormalizada) || rutaLocal.endsWith(rutaNormalizada)) {
+                        if (actualizarMensajeCoincidente(cn, id, serverId, serverTs, emisorNombre, receptorNombre, texto, audioBase64, mime, duracionSeg)) {
+                            return true;
+                        }
                     }
                 }
             }
         }
         return false;
+    }
+
+    private boolean actualizarMensajeCoincidente(Connection cn, long id, Long serverId, java.sql.Timestamp serverTs, String emisorNombre, String receptorNombre, String texto, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
+        try (PreparedStatement up = cn.prepareStatement(
+                "UPDATE mensajes SET server_id = ?, server_ts = ?, emisor_nombre = COALESCE(emisor_nombre, ?), receptor_nombre = COALESCE(receptor_nombre, ?), texto = COALESCE(texto, ?), audio_base64 = COALESCE(audio_base64, ?), audio_mime = COALESCE(audio_mime, ?), audio_duracion_seg = COALESCE(audio_duracion_seg, ?) WHERE id = ?")) {
+            if (serverId != null) up.setLong(1, serverId); else up.setNull(1, Types.BIGINT);
+            if (serverTs != null) up.setTimestamp(2, serverTs); else up.setNull(2, Types.TIMESTAMP);
+            if (emisorNombre != null) up.setString(3, emisorNombre); else up.setNull(3, Types.VARCHAR);
+            if (receptorNombre != null) up.setString(4, receptorNombre); else up.setNull(4, Types.VARCHAR);
+            if (texto != null) up.setString(5, texto); else up.setNull(5, Types.CLOB);
+            if (audioBase64 != null) up.setString(6, audioBase64); else up.setNull(6, Types.CLOB);
+            if (mime != null) up.setString(7, mime); else up.setNull(7, Types.VARCHAR);
+            if (duracionSeg != null) up.setInt(8, duracionSeg); else up.setNull(8, Types.INTEGER);
+            up.setLong(9, id);
+            return up.executeUpdate() > 0;
+        }
+    }
+
+    private String normalizarRuta(String ruta) {
+        if (ruta == null) return null;
+        String limpia = ruta.trim();
+        if (limpia.isEmpty()) return "";
+        int queryIdx = limpia.indexOf('?');
+        if (queryIdx >= 0) limpia = limpia.substring(0, queryIdx);
+        limpia = limpia.replace('\\', '/');
+        int idx = limpia.lastIndexOf('/');
+        if (idx >= 0 && idx + 1 < limpia.length()) {
+            limpia = limpia.substring(idx + 1);
+        }
+        return limpia;
     }
 }
