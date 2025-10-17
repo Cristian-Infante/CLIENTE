@@ -216,6 +216,17 @@ public class ServicioComandosChat {
     public boolean cerrarConexion() { return enviar("CLOSE_CONN", null); }
     public boolean logout() { return enviar("LOGOUT", null); }
 
+    private static byte[] decodificarBase64Seguro(String base64) {
+        if (base64 == null || base64.isBlank()) {
+            return new byte[0];
+        }
+        try {
+            return java.util.Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            return new byte[0];
+        }
+    }
+
     private static List<ClienteLocal> parsearUsuariosDeRespuesta(String jsonLinea) {
         List<ClienteLocal> usuarios = new ArrayList<>();
         if (jsonLinea == null) return usuarios;
@@ -245,17 +256,23 @@ public class ServicioComandosChat {
             Pattern puser = Pattern.compile("\\\"usuario\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pmail = Pattern.compile("\\\"email\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pcon = Pattern.compile("\\\"conectado\\\"\\s*:\\s*(true|false)");
+            Pattern pfoto = Pattern.compile("\\\"foto(?:Base64)?\\\"\\s*:\\s*\\\"(.*?)\\\"", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
             for (String obj : objetos) {
                 Matcher mid = pid.matcher(obj);
                 Matcher mus = puser.matcher(obj);
                 Matcher mma = pmail.matcher(obj);
                 Matcher mco = pcon.matcher(obj);
+                Matcher mfo = pfoto.matcher(obj);
                 if (mid.find() && mus.find()) {
                     ClienteLocal c = new ClienteLocal();
                     try { c.setId(Long.parseLong(mid.group(1))); } catch (Exception ignored) {}
                     c.setNombreDeUsuario(mus.group(1));
                     if (mma.find()) c.setEmail(mma.group(1));
                     if (mco.find()) c.setEstado(Boolean.parseBoolean(mco.group(1)));
+                    if (mfo.find()) {
+                        byte[] foto = decodificarBase64Seguro(mfo.group(1));
+                        if (foto.length > 0) c.setFoto(foto);
+                    }
                     usuarios.add(c);
                 }
             }
