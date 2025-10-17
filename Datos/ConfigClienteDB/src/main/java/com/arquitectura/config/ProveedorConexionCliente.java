@@ -54,8 +54,20 @@ public final class ProveedorConexionCliente {
     }
 
     private void inicializarEsquemaSiHaceFalta() throws SQLException {
-        if (esquemaInicializado.compareAndSet(false, true)) {
-            configuracion.inicializarEsquemaSiEsNecesario();
+        if (esquemaInicializado.get()) {
+            return;
+        }
+        synchronized (esquemaInicializado) {
+            if (esquemaInicializado.get()) {
+                return;
+            }
+            try {
+                configuracion.inicializarEsquemaSiEsNecesario();
+                esquemaInicializado.set(true);
+            } catch (SQLException e) {
+                esquemaInicializado.set(false);
+                throw e;
+            }
         }
     }
 }

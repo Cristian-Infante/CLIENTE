@@ -631,10 +631,10 @@ public class VistaChatPrincipal extends JFrame {
                 }
                 if (clienteTCP.estaConectado()) {
                     com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(clienteTCP);
-                    // Enviar LOGOUT pero mantener la conexión para evitar duplicados anónimos
                     comandos.logout();
                 }
             } catch (Exception ignored) {}
+            try { clienteTCP.desconectarSilencioso(); } catch (Exception ignored) {}
             dispose();
             SwingUtilities.invokeLater(() -> new VistaLogin().setVisible(true));
         }
