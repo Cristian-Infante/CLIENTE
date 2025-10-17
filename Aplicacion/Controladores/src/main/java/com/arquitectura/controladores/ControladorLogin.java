@@ -17,10 +17,19 @@ import java.util.Enumeration;
  * Nota: sin protocolo definido, se simula éxito y se genera un ClienteLocal en memoria.
  */
 public class ControladorLogin {
-    private final ServicioConexionChat servicioConexion = new ServicioConexionChat();
-    private final ServicioComandosChat comandos = new ServicioComandosChat(servicioConexion);
+    private final ServicioConexionChat servicioConexion;
+    private final ServicioComandosChat comandos;
     private ClienteLocal clienteSesion;
     private String ultimoMensajeServidor;
+
+    public ControladorLogin() {
+        this(new ServicioConexionChat());
+    }
+
+    public ControladorLogin(ServicioConexionChat servicioConexion) {
+        this.servicioConexion = servicioConexion;
+        this.comandos = new ServicioComandosChat(servicioConexion);
+    }
 
     public boolean iniciarSesion(String usuarioOEmail, String contrasenia) {
         try {

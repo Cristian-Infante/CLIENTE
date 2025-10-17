@@ -38,7 +38,13 @@ public class VistaLogin extends JFrame {
     private byte[] bytesFoto;
 
     public VistaLogin() {
-        this.controladorLogin = new ControladorLogin();
+        this(null);
+    }
+
+    public VistaLogin(ServicioConexionChat conexionCompartida) {
+        this.controladorLogin = (conexionCompartida != null)
+                ? new ControladorLogin(conexionCompartida)
+                : new ControladorLogin();
         inicializarComponentes();
         configurarVentana();
         // Intentar conectar al servidor al abrir la aplicacion (en segundo plano)

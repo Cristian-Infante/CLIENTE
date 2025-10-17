@@ -634,9 +634,8 @@ public class VistaChatPrincipal extends JFrame {
                     comandos.logout();
                 }
             } catch (Exception ignored) {}
-            try { clienteTCP.desconectarSilencioso(); } catch (Exception ignored) {}
             dispose();
-            SwingUtilities.invokeLater(() -> new VistaLogin().setVisible(true));
+            SwingUtilities.invokeLater(() -> new VistaLogin(clienteTCP).setVisible(true));
         }
     }
 
