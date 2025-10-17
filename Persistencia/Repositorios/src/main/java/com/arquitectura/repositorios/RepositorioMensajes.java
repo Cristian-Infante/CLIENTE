@@ -214,6 +214,9 @@ public class RepositorioMensajes {
     }
 
     public long insertarDesdeServidorTexto(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String contenido, String tipo) throws SQLException {
+        if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, false, contenido, null)) {
+            return 0L;
+        }
         if (existePorServerId(serverId)) return 0L;
         if (existePorCampos(emisorId, receptorId, canalId, false, contenido, null, serverTs)) return 0L;
         String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, server_id, server_ts) " +
@@ -237,6 +240,9 @@ public class RepositorioMensajes {
     }
 
     public long insertarDesdeServidorAudioConRuta(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String transcripcion, String tipo, String rutaArchivo) throws SQLException {
+        if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, true, transcripcion, rutaArchivo)) {
+            return 0L;
+        }
         if (existePorServerId(serverId)) return 0L;
         if (existePorCampos(emisorId, receptorId, canalId, true, null, rutaArchivo, serverTs)) return 0L;
         String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, server_id, server_ts) " +
@@ -258,5 +264,58 @@ public class RepositorioMensajes {
             try (ResultSet rs = ps.getGeneratedKeys()) { if (rs.next()) return rs.getLong(1); }
         }
         return 0L;
+    }
+
+    private boolean intentarActualizarCoincidenciaLocal(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, boolean esAudio, String texto, String rutaArchivo) throws SQLException {
+        boolean intentoPorRuta = esAudio && rutaArchivo != null && !rutaArchivo.isEmpty();
+        int intentos = intentoPorRuta ? 2 : 1;
+        for (int intento = 0; intento < intentos; intento++) {
+            boolean usarRuta = intento == 0 && intentoPorRuta;
+            String campoComparacion = usarRuta ? "ruta_audio" : "texto";
+            String valorComparacion = usarRuta ? rutaArchivo : texto;
+
+            StringBuilder sql = new StringBuilder("SELECT id FROM mensajes WHERE server_id IS NULL AND emisor_id = ? AND ");
+            if (receptorId != null) {
+                sql.append("receptor_id = ? AND ");
+            } else {
+                sql.append("receptor_id IS NULL AND ");
+            }
+            if (canalId != null) {
+                sql.append("canal_id = ? AND ");
+            } else {
+                sql.append("canal_id IS NULL AND ");
+            }
+            sql.append("es_audio = ? AND ");
+            if (valorComparacion == null) {
+                sql.append(campoComparacion).append(" IS NULL ");
+            } else {
+                sql.append(campoComparacion).append(" = ? ");
+            }
+            sql.append("ORDER BY fecha_envio DESC LIMIT 1");
+
+            try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
+                 PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+                int idx = 1;
+                ps.setLong(idx++, emisorId != null ? emisorId : 0L);
+                if (receptorId != null) ps.setLong(idx++, receptorId);
+                if (canalId != null) ps.setLong(idx++, canalId);
+                ps.setBoolean(idx++, esAudio);
+                if (valorComparacion != null) ps.setString(idx++, valorComparacion);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) continue;
+                    long id = rs.getLong(1);
+                    try (PreparedStatement up = cn.prepareStatement(
+                            "UPDATE mensajes SET server_id = ?, server_ts = ?, emisor_nombre = COALESCE(emisor_nombre, ?), receptor_nombre = COALESCE(receptor_nombre, ?) WHERE id = ?")) {
+                        up.setLong(1, serverId);
+                        if (serverTs != null) up.setTimestamp(2, serverTs); else up.setNull(2, Types.TIMESTAMP);
+                        if (emisorNombre != null) up.setString(3, emisorNombre); else up.setNull(3, Types.VARCHAR);
+                        if (receptorNombre != null) up.setString(4, receptorNombre); else up.setNull(4, Types.VARCHAR);
+                        up.setLong(5, id);
+                        return up.executeUpdate() > 0;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }
