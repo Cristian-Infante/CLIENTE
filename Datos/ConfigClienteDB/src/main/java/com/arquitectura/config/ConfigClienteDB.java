@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Objects;
@@ -142,4 +143,20 @@ public class ConfigClienteDB {
     public String obtenerUsuario() { return usuario; }
     public String obtenerClave() { return clave; }
     public boolean debeInicializar() { return inicializar; }
+
+    public void reasignarMensajesSinContexto(Long nuevoContextoId) {
+        if (nuevoContextoId == null) return;
+        try (Connection c = obtenerConexion();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE mensajes SET contexto_usuario_id = ? " +
+                             "WHERE contexto_usuario_id IS NULL OR contexto_usuario_id = 0")) {
+            ps.setLong(1, nuevoContextoId);
+            int actualizados = ps.executeUpdate();
+            if (actualizados > 0) {
+                System.out.println("[ConfigClienteDB] Mensajes reasignados al contexto " + nuevoContextoId + ": " + actualizados);
+            }
+        } catch (SQLException e) {
+            System.out.println("[ConfigClienteDB] No se pudieron reasignar mensajes sin contexto: " + e.getMessage());
+        }
+    }
 }
