@@ -4,6 +4,7 @@ import com.arquitectura.infra.net.OyenteMensajesChat;
 import com.arquitectura.repositorios.RepositorioMensajes;
 
 import java.sql.SQLException;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -156,32 +157,46 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(obj, "timeStamp", "timestamp"));
                 String tipoConversacion = obtenerCampoTexto(obj, "tipoConversacion");
                 boolean esCanal = canalId != null || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
-                boolean esAudio = "AUDIO".equalsIgnoreCase(tipoMsg);
+                Boolean marcaAudio = obtenerCampoBooleano(obj, "esAudio", "audio", "audioFlag");
 
                 String contenidoObjeto = extraerObjeto(obj, "contenido");
                 String contenidoPlano = obtenerCampoTextoPermitirNulo(obj, "contenido", "texto");
-                String ruta = obtenerCampoTexto(obj, "rutaArchivo");
-                String transcripcion = obtenerCampoTextoPermitirNulo(obj, "transcripcion");
-                String audioBase64 = obtenerCampoTextoPermitirNulo(obj, "audioBase64");
-                String audioMime = obtenerCampoTextoPermitirNulo(obj, "mime");
-                Integer duracionSeg = obtenerCampoEntero(obj, "duracionSeg");
+                String ruta = obtenerCampoTexto(obj, "rutaArchivo", "ruta", "rutaAudio");
+                String transcripcion = obtenerCampoTextoPermitirNulo(obj, "transcripcion", "transcripcionTexto", "transcripcionMensaje", "transcription");
+                String audioBase64 = obtenerCampoTextoPermitirNulo(obj, "audioBase64", "base64", "audio");
+                String audioMime = obtenerCampoTextoPermitirNulo(obj, "mime", "mimeType", "tipoMime");
+                Integer duracionSeg = obtenerCampoEntero(obj, "duracionSeg", "duracion", "duracionSegundos", "duracionEnSegundos");
                 if (contenidoObjeto != null) {
-                    if (esAudio) {
-                        String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
+                    boolean probableAudio = Boolean.TRUE.equals(marcaAudio)
+                            || "AUDIO".equalsIgnoreCase(tipoMsg)
+                            || contieneCampo(contenidoObjeto, "audioBase64")
+                            || contieneCampo(contenidoObjeto, "rutaArchivo")
+                            || contieneCampo(contenidoObjeto, "ruta")
+                            || contieneCampo(contenidoObjeto, "rutaAudio")
+                            || contieneCampo(contenidoObjeto, "mime")
+                            || contieneCampo(contenidoObjeto, "mimeType")
+                            || contieneCampo(contenidoObjeto, "tipoMime");
+                    if (probableAudio) {
+                        String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo", "ruta", "rutaAudio");
                         if (rutaInterna != null) ruta = rutaInterna;
-                        String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion");
+                        String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion", "transcripcionTexto", "transcripcionMensaje", "transcription");
                         if (transcripcionInterna != null || contieneCampo(contenidoObjeto, "transcripcion")) transcripcion = transcripcionInterna;
-                        String base64Interno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "audioBase64");
+                        String base64Interno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "audioBase64", "base64", "audio");
                         if (base64Interno != null || contieneCampo(contenidoObjeto, "audioBase64")) audioBase64 = base64Interno;
-                        String mimeInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "mime");
+                        String mimeInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "mime", "mimeType", "tipoMime");
                         if (mimeInterno != null || contieneCampo(contenidoObjeto, "mime")) audioMime = mimeInterno;
-                        Integer duracionInterna = obtenerCampoEntero(contenidoObjeto, "duracionSeg");
+                        Integer duracionInterna = obtenerCampoEntero(contenidoObjeto, "duracionSeg", "duracion", "duracionSegundos", "duracionEnSegundos");
                         if (duracionInterna != null || contieneCampo(contenidoObjeto, "duracionSeg")) duracionSeg = duracionInterna;
                     } else {
                         String contenidoInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "contenido", "texto");
                         if (contenidoInterno != null || contieneCampo(contenidoObjeto, "contenido") || contieneCampo(contenidoObjeto, "texto")) contenidoPlano = contenidoInterno;
                     }
                 }
+
+                boolean esAudio = Boolean.TRUE.equals(marcaAudio)
+                        || "AUDIO".equalsIgnoreCase(tipoMsg)
+                        || (audioMime != null && audioMime.toLowerCase(Locale.ROOT).startsWith("audio"))
+                        || (ruta != null && !ruta.isBlank());
 
                 if (esAudio) {
                     if (esCanal) {
@@ -238,32 +253,46 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payloadMensaje, "timeStamp", "timestamp"));
             String tipoConversacion = obtenerCampoTexto(payloadMensaje, "tipoConversacion");
             boolean esCanal = contieneEventoCanal(compact) || "NEW_CHANNEL_MESSAGE".equalsIgnoreCase(command) || (canalId != null) || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
-            boolean esAudio = "AUDIO".equalsIgnoreCase(tipoMsg);
+            Boolean marcaAudio = obtenerCampoBooleano(payloadMensaje, "esAudio", "audio", "audioFlag");
 
             String contenidoObjeto = extraerObjeto(payloadMensaje, "contenido");
             String contenidoPlano = obtenerCampoTextoPermitirNulo(payloadMensaje, "contenido", "texto");
-            String ruta = obtenerCampoTexto(payloadMensaje, "rutaArchivo");
-            String transcripcion = obtenerCampoTextoPermitirNulo(payloadMensaje, "transcripcion");
-            String audioBase64 = obtenerCampoTextoPermitirNulo(payloadMensaje, "audioBase64");
-            String audioMime = obtenerCampoTextoPermitirNulo(payloadMensaje, "mime");
-            Integer duracionSeg = obtenerCampoEntero(payloadMensaje, "duracionSeg");
+            String ruta = obtenerCampoTexto(payloadMensaje, "rutaArchivo", "ruta", "rutaAudio");
+            String transcripcion = obtenerCampoTextoPermitirNulo(payloadMensaje, "transcripcion", "transcripcionTexto", "transcripcionMensaje", "transcription");
+            String audioBase64 = obtenerCampoTextoPermitirNulo(payloadMensaje, "audioBase64", "base64", "audio");
+            String audioMime = obtenerCampoTextoPermitirNulo(payloadMensaje, "mime", "mimeType", "tipoMime");
+            Integer duracionSeg = obtenerCampoEntero(payloadMensaje, "duracionSeg", "duracion", "duracionSegundos", "duracionEnSegundos");
             if (contenidoObjeto != null) {
-                if (esAudio) {
-                    String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
+                boolean probableAudio = Boolean.TRUE.equals(marcaAudio)
+                        || "AUDIO".equalsIgnoreCase(tipoMsg)
+                        || contieneCampo(contenidoObjeto, "audioBase64")
+                        || contieneCampo(contenidoObjeto, "rutaArchivo")
+                        || contieneCampo(contenidoObjeto, "ruta")
+                        || contieneCampo(contenidoObjeto, "rutaAudio")
+                        || contieneCampo(contenidoObjeto, "mime")
+                        || contieneCampo(contenidoObjeto, "mimeType")
+                        || contieneCampo(contenidoObjeto, "tipoMime");
+                if (probableAudio) {
+                    String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo", "ruta", "rutaAudio");
                     if (rutaInterna != null) ruta = rutaInterna;
-                    String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion");
+                    String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion", "transcripcionTexto", "transcripcionMensaje", "transcription");
                     if (transcripcionInterna != null || contieneCampo(contenidoObjeto, "transcripcion")) transcripcion = transcripcionInterna;
-                    String base64Interno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "audioBase64");
+                    String base64Interno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "audioBase64", "base64", "audio");
                     if (base64Interno != null || contieneCampo(contenidoObjeto, "audioBase64")) audioBase64 = base64Interno;
-                    String mimeInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "mime");
+                    String mimeInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "mime", "mimeType", "tipoMime");
                     if (mimeInterno != null || contieneCampo(contenidoObjeto, "mime")) audioMime = mimeInterno;
-                    Integer duracionInterna = obtenerCampoEntero(contenidoObjeto, "duracionSeg");
+                    Integer duracionInterna = obtenerCampoEntero(contenidoObjeto, "duracionSeg", "duracion", "duracionSegundos", "duracionEnSegundos");
                     if (duracionInterna != null || contieneCampo(contenidoObjeto, "duracionSeg")) duracionSeg = duracionInterna;
                 } else {
                     String contenidoInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "contenido", "texto");
                     if (contenidoInterno != null || contieneCampo(contenidoObjeto, "contenido") || contieneCampo(contenidoObjeto, "texto")) contenidoPlano = contenidoInterno;
                 }
             }
+
+            boolean esAudio = Boolean.TRUE.equals(marcaAudio)
+                    || "AUDIO".equalsIgnoreCase(tipoMsg)
+                    || (audioMime != null && audioMime.toLowerCase(Locale.ROOT).startsWith("audio"))
+                    || (ruta != null && !ruta.isBlank());
 
             if (esAudio) {
                 if (esCanal) {
@@ -425,6 +454,16 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         return null;
     }
 
+    private static Boolean obtenerCampoBooleano(String json, String... nombres) {
+        if (nombres == null) return null;
+        for (String nombre : nombres) {
+            if (nombre == null) continue;
+            Boolean v = extraerBooleano(json, nombre);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
     private static String extraerCampo(String json, String campo) {
         try {
             Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*\\\"(.*?)\\\"");
@@ -460,6 +499,15 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(-?\\d+)");
             Matcher m = p.matcher(json);
             if (m.find()) return Integer.parseInt(m.group(1));
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private static Boolean extraerBooleano(String json, String campo) {
+        try {
+            Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(true|false)", Pattern.CASE_INSENSITIVE);
+            Matcher m = p.matcher(json);
+            if (m.find()) return Boolean.parseBoolean(m.group(1));
         } catch (Exception ignored) {}
         return null;
     }
