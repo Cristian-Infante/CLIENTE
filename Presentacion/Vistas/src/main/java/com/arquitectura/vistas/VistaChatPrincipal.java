@@ -487,8 +487,7 @@ public class VistaChatPrincipal extends JFrame {
             final ControladorAudio.ResultadoEnvioAudio resFinal = resultado;
             SwingUtilities.invokeLater(() -> {
                 if (resFinal != null && resFinal.exito) {
-                    String ruta = resFinal.rutaArchivo != null ? resFinal.rutaArchivo : "";
-                    agregarMensajeTemporalAudio(ruta, resFinal.duracionSegundos, Base64.getEncoder().encodeToString(datosWav));
+                    refrescarMensajesActuales();
                     if (resFinal.mensaje != null && !resFinal.mensaje.isBlank()) {
                         JOptionPane.showMessageDialog(this, resFinal.mensaje, "Audio enviado", JOptionPane.INFORMATION_MESSAGE);
                     }
@@ -750,19 +749,16 @@ public class VistaChatPrincipal extends JFrame {
         desplazarAlFinal();
     }
 
-    private void agregarMensajeTemporalAudio(String ruta, int duracionSeg, String audioBase64) {
-        AudioMensajeLocal mensaje = new AudioMensajeLocal();
-        mensaje.setTimeStamp(LocalDateTime.now());
-        mensaje.setEmisor(usuarioActual.getId());
-        mensaje.setEmisorNombre(usuarioActual.getNombreDeUsuario());
-        mensaje.setRutaArchivo(ruta);
-        mensaje.setDuracionSeg(Math.max(duracionSeg, 0));
-        mensaje.setAudioBase64(audioBase64);
-        mensaje.setMime("audio/wav");
-        agregarMensajeVisual(mensaje);
-        contenedorMensajes.revalidate();
-        contenedorMensajes.repaint();
-        desplazarAlFinal();
+    private void refrescarMensajesActuales() {
+        if (usuarioSeleccionado != null) {
+            java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(usuarioSeleccionado.getId());
+            limpiarMensajes();
+            mostrarMensajes(hist);
+        } else if (canalSeleccionado != null) {
+            java.util.List<MensajeLocal> historial = chatController.obtenerMensajesCanalDetallados(canalSeleccionado.getId());
+            limpiarMensajes();
+            mostrarMensajes(historial);
+        }
     }
 
     private void desplazarAlFinal() {
