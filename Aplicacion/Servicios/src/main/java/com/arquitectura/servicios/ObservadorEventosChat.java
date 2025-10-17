@@ -40,8 +40,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         if (mensaje == null) return;
         String compact = mensaje.replaceAll("\\s+", "");
         String raw = mensaje.replace('\n',' ').replace('\r',' ');
+        String rawLog = SanitizadorBase64Logs.truncarCamposBase64(raw);
         String payload = extraerObjetoPayload(raw);
         if (payload == null) payload = raw;
+        String payloadLog = SanitizadorBase64Logs.truncarCamposBase64(payload);
         String command = extraerCampo(compact, "command");
         registrarLogGenerico(command, payload, raw);
         // Procesar sincronizaciones masivas (log y encolar)
@@ -55,7 +57,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             sb.append("- totalMensajes: ").append(total).append('\n');
             sb.append("- itemsEnArray: ").append(arr != null ? arr.size() : 0).append('\n');
             sb.append("- ultimaSincronizacion: ").append(ultima).append('\n');
-            sb.append("- payload: ").append(payload).append('\n');
+            sb.append("- payload: ").append(payloadLog).append('\n');
             sb.append("================================\n");
             System.out.println(sb.toString());
             ioPool.submit(() -> procesarMessageSync(mensaje));
@@ -90,7 +92,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             if (contenido != null) sb.append("- contenido: ").append(contenido).append('\n');
             if (rutaArchivo != null) sb.append("- rutaArchivo: ").append(rutaArchivo).append('\n');
             if (transcripcion != null) sb.append("- transcripcion: ").append(transcripcion).append('\n');
-            sb.append("- jsonCompleto: ").append(raw).append('\n');
+            sb.append("- jsonCompleto: ").append(rawLog).append('\n');
             sb.append("====================================\n");
             System.out.println(sb.toString());
         } else if (esComandoPrivado) {
@@ -104,7 +106,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             sb.append("- emisor: ").append(emisor).append('\n');
             sb.append("- receptor: ").append(receptor).append('\n');
             if (contenido != null) sb.append("- contenido: ").append(contenido).append('\n');
-            sb.append("- jsonCompleto: ").append(raw).append('\n');
+            sb.append("- jsonCompleto: ").append(rawLog).append('\n');
             sb.append("===============================\n");
             System.out.println(sb.toString());
         }
@@ -116,13 +118,14 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         StringBuilder sb = new StringBuilder();
         sb.append("[ObservadorEventosChat] Evento recibido command=").append(command);
         if ("EVENT".equalsIgnoreCase(command)) {
-            String tipoEvento = extraerCampo(payload, "tipo");
+            String origenParaTipo = payload != null ? payload : raw;
+            String tipoEvento = extraerCampo(origenParaTipo, "tipo");
             if (tipoEvento == null) tipoEvento = extraerCampo(raw, "tipo");
             if (tipoEvento != null) {
                 sb.append(" tipo=").append(tipoEvento);
             }
         }
-        sb.append(" json=").append(raw);
+        sb.append(" json=").append(SanitizadorBase64Logs.truncarCamposBase64(raw));
         System.out.println(sb.toString());
     }
 
@@ -228,7 +231,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         } catch (SQLException e) {
             System.out.println("[ObservadorEventosChat] Error insertando en BD (sync): " + e);
         } catch (Exception e) {
-            System.out.println("[ObservadorEventosChat] Error procesando MESSAGE_SYNC: " + e + " json=" + json);
+            System.out.println("[ObservadorEventosChat] Error procesando MESSAGE_SYNC: " + e + " json=" + SanitizadorBase64Logs.truncarCamposBase64(json));
         }
     }
 
@@ -320,7 +323,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         } catch (SQLException e) {
             System.out.println("[ObservadorEventosChat] Error insertando en BD: " + e);
         } catch (Exception e) {
-            System.out.println("[ObservadorEventosChat] Error procesando evento: " + e + " json=" + json);
+            System.out.println("[ObservadorEventosChat] Error procesando evento: " + e + " json=" + SanitizadorBase64Logs.truncarCamposBase64(json));
         }
     }
 

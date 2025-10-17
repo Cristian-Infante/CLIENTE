@@ -33,6 +33,11 @@ public class ServicioComandosChat {
         }
     }
 
+    private void imprimirRespuesta(String prefijo, String linea) {
+        String contenido = linea != null ? SanitizadorBase64Logs.truncarCamposBase64(linea) : "null";
+        System.out.println(prefijo + contenido);
+    }
+
     // Autenticación
     public boolean registrar(String usuario, String email, String contrasenia, String fotoBase64, String fotoPath, String ip) {
         Map<String, Object> p = ProtocoloChat.mapa();
@@ -162,7 +167,7 @@ public class ServicioComandosChat {
     public List<ClienteLocal> listarUsuariosYEsperar(long timeoutMs) {
         if (!enviar("LIST_USERS", null)) return List.of();
         String linea = conexion.esperarRespuesta("LIST_USERS", timeoutMs);
-        System.out.println("Respuesta LIST_USERS: " + linea);
+        imprimirRespuesta("Respuesta LIST_USERS: ", linea);
         if (linea == null) return List.of();
         return parsearUsuariosDeRespuesta(linea);
     }
@@ -170,14 +175,14 @@ public class ServicioComandosChat {
     public List<com.arquitectura.entidades.CanalLocal> listarCanalesYEsperar(long timeoutMs) {
         if (!enviar("LIST_CHANNELS", null)) return List.of();
         String linea = conexion.esperarRespuesta("LIST_CHANNELS", timeoutMs);
-        System.out.println("Respuesta LIST_CHANNELS: " + linea);
+        imprimirRespuesta("Respuesta LIST_CHANNELS: ", linea);
         if (linea == null) return List.of();
         return parsearCanalesDeRespuesta(linea);
     }
     public List<ClienteLocal> listarConectadosYEsperar(long timeoutMs) {
         if (!enviar("LIST_CONNECTED", null)) return List.of();
         String linea = conexion.esperarRespuesta("LIST_CONNECTED", timeoutMs);
-        System.out.println("Respuesta LIST_CONNECTED: " + linea);
+        imprimirRespuesta("Respuesta LIST_CONNECTED: ", linea);
         if (linea == null) return List.of();
         return parsearUsuariosDeRespuesta(linea);
     }
@@ -187,14 +192,14 @@ public class ServicioComandosChat {
     public java.util.List<InvRecibida> listarInvitacionesRecibidasYEsperar(long timeoutMs) {
         if (!enviar("LIST_RECEIVED_INVITATIONS", null)) return java.util.List.of();
         String linea = conexion.esperarRespuesta("LIST_RECEIVED_INVITATIONS", timeoutMs);
-        System.out.println("Respuesta LIST_RECEIVED_INVITATIONS: " + linea);
+        imprimirRespuesta("Respuesta LIST_RECEIVED_INVITATIONS: ", linea);
         if (linea == null) return java.util.List.of();
         return parsearInvRecibidas(linea);
     }
     public java.util.List<InvEnviada> listarInvitacionesEnviadasYEsperar(long timeoutMs) {
         if (!enviar("LIST_SENT_INVITATIONS", null)) return java.util.List.of();
         String linea = conexion.esperarRespuesta("LIST_SENT_INVITATIONS", timeoutMs);
-        System.out.println("Respuesta LIST_SENT_INVITATIONS: " + linea);
+        imprimirRespuesta("Respuesta LIST_SENT_INVITATIONS: ", linea);
         if (linea == null) return java.util.List.of();
         return parsearInvEnviadas(linea);
     }
@@ -393,7 +398,7 @@ public class ServicioComandosChat {
         if (ip != null) p.put("ip", ip);
         if (!enviar("LOGIN", p)) return false;
         String linea = conexion.esperarRespuesta("LOGIN", timeoutMs);
-        System.out.println("Respuesta LOGIN: " + linea);
+        imprimirRespuesta("Respuesta LOGIN: ", linea);
         if (linea == null) return false;
         return esRespuestaLoginExitosa(linea);
     }
@@ -405,7 +410,7 @@ public class ServicioComandosChat {
         if (ip != null) p.put("ip", ip);
         if (!enviar("LOGIN", p)) return new ResultadoLogin(false, "No se pudo enviar solicitud", null);
         String linea = conexion.esperarRespuesta("LOGIN", timeoutMs);
-        System.out.println("Respuesta LOGIN: " + linea);
+        imprimirRespuesta("Respuesta LOGIN: ", linea);
         if (linea == null) return new ResultadoLogin(false, "Tiempo de espera agotado", null);
         boolean ok = esRespuestaLoginExitosa(linea);
         String msg = extraerMensajeDeLinea(linea);
