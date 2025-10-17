@@ -38,11 +38,13 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
     public void alRecibirMensaje(String mensaje) {
         if (mensaje == null) return;
         String compact = mensaje.replaceAll("\\s+", "");
+        String raw = mensaje.replace('\n',' ').replace('\r',' ');
+        String payload = extraerObjetoPayload(raw);
+        if (payload == null) payload = raw;
+        String command = extraerCampo(compact, "command");
+        registrarLogGenerico(command, payload, raw);
         // Procesar sincronizaciones masivas (log y encolar)
         if (compact.contains("\"command\":\"MESSAGE_SYNC\"")) {
-            String raw = mensaje.replace('\n',' ').replace('\r',' ');
-            String payload = extraerObjetoPayload(raw);
-            if (payload == null) payload = raw;
             String ultima = extraerCampo(payload, "ultimaSincronizacion");
             Long total = null;
             try { String t = extraerCampo(payload, "totalMensajes"); if (t != null) total = Long.parseLong(t); } catch (Exception ignored) {}
@@ -62,9 +64,6 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         boolean esComandoPrivado = contieneEventoPrivado(compact);
         if (!(esComandoCanal || esComandoPrivado)) return;
 
-        String raw = mensaje.replace('\n',' ').replace('\r',' ');
-        String payload = extraerObjetoPayload(raw);
-        if (payload == null) payload = raw;
         String payloadMensaje = extraerPayloadMensaje(compact, payload);
         // Log organizado para NEW_CHANNEL_MESSAGE recibido (incluye eventos empaquetados en EVENT)
         if (esComandoCanal) {
@@ -109,6 +108,21 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             System.out.println(sb.toString());
         }
         ioPool.submit(() -> procesarEventoMensaje(mensaje));
+    }
+
+    private void registrarLogGenerico(String command, String payload, String raw) {
+        if (command == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ObservadorEventosChat] Evento recibido command=").append(command);
+        if ("EVENT".equalsIgnoreCase(command)) {
+            String tipoEvento = extraerCampo(payload, "tipo");
+            if (tipoEvento == null) tipoEvento = extraerCampo(raw, "tipo");
+            if (tipoEvento != null) {
+                sb.append(" tipo=").append(tipoEvento);
+            }
+        }
+        sb.append(" json=").append(raw);
+        System.out.println(sb.toString());
     }
 
     private void procesarMessageSync(String json) {
