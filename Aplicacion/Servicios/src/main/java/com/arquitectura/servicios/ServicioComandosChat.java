@@ -241,7 +241,7 @@ public class ServicioComandosChat {
                 if (ch == '{') { if (depth == 0) objStart = i; depth++; }
                 else if (ch == '}') { depth--; if (depth == 0 && objStart >= 0) { objetos.add(arrayText.substring(objStart, i+1)); objStart = -1; } }
             }
-            Pattern pid = Pattern.compile("\\\"id\\\"\\s*:\\s*(\\d+)");
+            Pattern pid = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern puser = Pattern.compile("\\\"usuario\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pmail = Pattern.compile("\\\"email\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pcon = Pattern.compile("\\\"conectado\\\"\\s*:\\s*(true|false)");
@@ -285,7 +285,7 @@ public class ServicioComandosChat {
                 if (ch == '{') { if (depth == 0) objStart = i; depth++; }
                 else if (ch == '}') { depth--; if (depth == 0 && objStart >= 0) { objetos.add(arrayText.substring(objStart, i+1)); objStart = -1; } }
             }
-            Pattern pid = Pattern.compile("\\\"id\\\"\\s*:\\s*(\\d+)");
+            Pattern pid = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern pnom = Pattern.compile("\\\"nombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern ppriv = Pattern.compile("\\\"privado\\\"\\s*:\\s*(true|false)");
             for (String obj : objetos) {
@@ -320,10 +320,10 @@ public class ServicioComandosChat {
             if (endArr < 0) return res;
             String arrayText = jsonLinea.substring(startArr+1, endArr);
             java.util.List<String> objs = new java.util.ArrayList<>(); depth=0; int os=-1; for (int i=0;i<arrayText.length();i++){ char ch=arrayText.charAt(i); if(ch=='{'){ if(depth==0) os=i; depth++; } else if(ch=='}'){ depth--; if(depth==0&&os>=0){ objs.add(arrayText.substring(os,i+1)); os=-1; } } }
-            Pattern pCanalId = Pattern.compile("\\\"canalId\\\"\\s*:\\s*(\\d+)");
+            Pattern pCanalId = Pattern.compile("\\\"canalId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern pCanalNom = Pattern.compile("\\\"canalNombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pCanalPriv = Pattern.compile("\\\"canalPrivado\\\"\\s*:\\s*(true|false)");
-            Pattern pInvId = Pattern.compile("\\\"invitadorId\\\"\\s*:\\s*(\\d+)");
+            Pattern pInvId = Pattern.compile("\\\"invitadorId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern pInvNom = Pattern.compile("\\\"invitadorNombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             for (String obj : objs) {
                 InvRecibida ir = new InvRecibida();
@@ -349,10 +349,10 @@ public class ServicioComandosChat {
             if (endArr < 0) return res;
             String arrayText = jsonLinea.substring(startArr+1, endArr);
             java.util.List<String> objs = new java.util.ArrayList<>(); depth=0; int os=-1; for (int i=0;i<arrayText.length();i++){ char ch=arrayText.charAt(i); if(ch=='{'){ if(depth==0) os=i; depth++; } else if(ch=='}'){ depth--; if(depth==0&&os>=0){ objs.add(arrayText.substring(os,i+1)); os=-1; } } }
-            Pattern pCanalId = Pattern.compile("\\\"canalId\\\"\\s*:\\s*(\\d+)");
+            Pattern pCanalId = Pattern.compile("\\\"canalId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern pCanalNom = Pattern.compile("\\\"canalNombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pCanalPriv = Pattern.compile("\\\"canalPrivado\\\"\\s*:\\s*(true|false)");
-            Pattern pInvId = Pattern.compile("\\\"invitadoId\\\"\\s*:\\s*(\\d+)");
+            Pattern pInvId = Pattern.compile("\\\"invitadoId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern pInvNom = Pattern.compile("\\\"invitadoNombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pEstado = Pattern.compile("\\\"estado\\\"\\s*:\\s*\\\"(.*?)\\\"");
             for (String obj : objs) {

@@ -487,18 +487,32 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
     private static Long extraerLong(String json, String campo) {
         try {
-            Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(-?\\d+)");
+            Pattern p = Pattern.compile(
+                    "\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(?:\\\"(-?\\d+)\\\"|(-?\\d+))"
+            );
             Matcher m = p.matcher(json);
-            if (m.find()) return Long.parseLong(m.group(1));
+            if (m.find()) {
+                String valor = m.group(1) != null ? m.group(1) : m.group(2);
+                if (valor != null && !valor.isBlank()) {
+                    return Long.parseLong(valor);
+                }
+            }
         } catch (Exception ignored) {}
         return null;
     }
 
     private static Integer extraerEntero(String json, String campo) {
         try {
-            Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(-?\\d+)");
+            Pattern p = Pattern.compile(
+                    "\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(?:\\\"(-?\\d+)\\\"|(-?\\d+))"
+            );
             Matcher m = p.matcher(json);
-            if (m.find()) return Integer.parseInt(m.group(1));
+            if (m.find()) {
+                String valor = m.group(1) != null ? m.group(1) : m.group(2);
+                if (valor != null && !valor.isBlank()) {
+                    return Integer.parseInt(valor);
+                }
+            }
         } catch (Exception ignored) {}
         return null;
     }
