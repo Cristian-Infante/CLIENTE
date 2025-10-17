@@ -38,6 +38,11 @@ public final class ProveedorConexionCliente {
     public void configurarContextoUsuario(Long usuarioId, String nombreUsuario) {
         this.contextoUsuarioId = usuarioId;
         this.contextoUsuarioNombre = nombreUsuario;
+        try {
+            inicializarEsquemaSiHaceFalta();
+            configuracion.reasignarMensajesSinContexto(usuarioId);
+        } catch (Exception ignored) {
+        }
     }
 
     public Long obtenerContextoUsuarioId() {
