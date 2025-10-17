@@ -48,6 +48,7 @@ public class VistaChatPrincipal extends JFrame {
 
     // Barra de herramientas
     private JLabel lblUsuario;
+    private JLabel lblFotoPerfil;
     private JLabel lblEstadoConexion;
     private JButton btnCanales;
     private JButton btnSolicitudes;
@@ -167,7 +168,20 @@ public class VistaChatPrincipal extends JFrame {
         lblUsuario = new JLabel("Usuario: " + usuarioActual.getNombreDeUsuario());
         lblUsuario.setFont(new Font("Arial", Font.BOLD, 16));
         lblUsuario.setForeground(Color.WHITE);
-        panel.add(lblUsuario, BorderLayout.WEST);
+
+        lblFotoPerfil = new JLabel();
+        lblFotoPerfil.setPreferredSize(new Dimension(48, 48));
+        lblFotoPerfil.setHorizontalAlignment(SwingConstants.CENTER);
+        lblFotoPerfil.setVerticalAlignment(SwingConstants.CENTER);
+        lblFotoPerfil.setOpaque(false);
+        lblFotoPerfil.setBorder(new LineBorder(new Color(255, 255, 255, 160), 1, true));
+        actualizarFotoPerfil();
+
+        JPanel panelUsuario = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        panelUsuario.setOpaque(false);
+        panelUsuario.add(lblFotoPerfil);
+        panelUsuario.add(lblUsuario);
+        panel.add(panelUsuario, BorderLayout.WEST);
 
         JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         panelBotones.setOpaque(false);
@@ -184,6 +198,38 @@ public class VistaChatPrincipal extends JFrame {
         panelBotones.add(btnCerrarSesion);
         panel.add(panelBotones, BorderLayout.EAST);
         return panel;
+    }
+
+    private void actualizarFotoPerfil() {
+        if (lblFotoPerfil == null) {
+            return;
+        }
+        ImageIcon icono = crearIconoPerfil(usuarioActual != null ? usuarioActual.getFoto() : null);
+        if (icono != null) {
+            lblFotoPerfil.setIcon(icono);
+            lblFotoPerfil.setText("");
+        } else {
+            lblFotoPerfil.setIcon(null);
+            lblFotoPerfil.setText("👤");
+            lblFotoPerfil.setForeground(Color.WHITE);
+        }
+    }
+
+    private ImageIcon crearIconoPerfil(byte[] datos) {
+        if (datos == null || datos.length == 0) {
+            return null;
+        }
+        try {
+            ImageIcon icono = new ImageIcon(datos);
+            Image img = icono.getImage();
+            if (img == null) {
+                return null;
+            }
+            Image escalada = img.getScaledInstance(48, 48, Image.SCALE_SMOOTH);
+            return new ImageIcon(escalada);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private JPanel crearPanelIzquierdo() {
