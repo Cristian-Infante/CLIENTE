@@ -14,8 +14,6 @@ import com.arquitectura.servicios.ServicioEventosMensajes;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 
 public class VistaChatPrincipal extends JFrame {
     private final ClienteLocal usuarioActual;
@@ -38,7 +36,6 @@ public class VistaChatPrincipal extends JFrame {
     private JLabel lblEstadoConexion;
     private JButton btnCanales;
     private JButton btnSolicitudes;
-    private JButton btnConfiguracion;
     private JButton btnCerrarSesion;
 
     // Panel izquierdo - Lista de conversaciones
@@ -47,7 +44,6 @@ public class VistaChatPrincipal extends JFrame {
     private JList<ClienteLocal> listaUsuarios;
     private DefaultListModel<CanalLocal> modeloCanales;
     private JList<CanalLocal> listaCanales;
-    private JTextField txtBuscar;
 
     // Panel central - Chat
     private JTextArea areaMensajes;
@@ -164,14 +160,11 @@ public class VistaChatPrincipal extends JFrame {
         btnCanales.addActionListener(e -> mostrarVentanaCanales());
         btnSolicitudes = new JButton("Solicitudes");
         btnSolicitudes.addActionListener(e -> mostrarVentanaSolicitudes());
-        btnConfiguracion = new JButton("Config");
-        btnConfiguracion.addActionListener(e -> mostrarConfiguracion());
         btnCerrarSesion = new JButton("Salir");
         btnCerrarSesion.addActionListener(e -> cerrarSesion());
 
         panelBotones.add(btnCanales);
         panelBotones.add(btnSolicitudes);
-        panelBotones.add(btnConfiguracion);
         panelBotones.add(btnCerrarSesion);
         panel.add(panelBotones, BorderLayout.EAST);
         return panel;
@@ -180,15 +173,6 @@ public class VistaChatPrincipal extends JFrame {
     private JPanel crearPanelIzquierdo() {
         panelIzquierdo = new JPanel(new BorderLayout());
         panelIzquierdo.setBorder(BorderFactory.createTitledBorder("Conversaciones"));
-
-        JPanel panelBuscar = new JPanel(new BorderLayout(5, 5));
-        panelBuscar.setBorder(new EmptyBorder(5, 5, 5, 5));
-        txtBuscar = new JTextField();
-        txtBuscar.addKeyListener(new KeyAdapter() {
-            public void keyReleased(KeyEvent e) { filtrarListas(); }
-        });
-        panelBuscar.add(new JLabel("Buscar:"), BorderLayout.WEST);
-        panelBuscar.add(txtBuscar, BorderLayout.CENTER);
 
         tabsConversaciones = new JTabbedPane();
 
@@ -212,7 +196,6 @@ public class VistaChatPrincipal extends JFrame {
             @Override public void mouseClicked(java.awt.event.MouseEvent e) { refrescarSegunTabSeleccionada(); }
         });
 
-        panelIzquierdo.add(panelBuscar, BorderLayout.NORTH);
         panelIzquierdo.add(tabsConversaciones, BorderLayout.CENTER);
         return panelIzquierdo;
     }
@@ -483,10 +466,6 @@ public class VistaChatPrincipal extends JFrame {
         areaInfo.setText(info.toString());
     }
 
-    private void filtrarListas() {
-        // TODO: implementar cuando haya datos reales
-    }
-
     private void mostrarVentanaCanales() {
         VistaCanal vista = new VistaCanal(usuarioActual, clienteTCP);
         vista.setVisible(true);
@@ -579,10 +558,6 @@ public class VistaChatPrincipal extends JFrame {
             listaEnv.add(fila);
         }
         listaEnv.revalidate(); listaEnv.repaint();
-    }
-
-    private void mostrarConfiguracion() {
-        JOptionPane.showMessageDialog(this, "Configuración en desarrollo", "Configuración", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void cerrarSesion() {
