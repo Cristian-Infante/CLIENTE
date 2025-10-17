@@ -58,25 +58,28 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             ioPool.submit(() -> procesarMessageSync(mensaje));
             return;
         }
-        // Solo procesar comandos de mensaje nuevos
-        if (!(compact.contains("\"command\":\"NEW_MESSAGE\"") || compact.contains("\"command\":\"NEW_CHANNEL_MESSAGE\""))) return;
-        // Log organizado para NEW_CHANNEL_MESSAGE recibido
-        if (compact.contains("\"command\":\"NEW_CHANNEL_MESSAGE\"")) {
-            String raw = mensaje.replace('\n',' ').replace('\r',' ');
-            String payload = extraerObjetoPayload(raw);
-            if (payload == null) payload = raw;
-            Long canalId = extraerLong(payload, "canalId");
+        boolean esComandoCanal = contieneEventoCanal(compact);
+        boolean esComandoPrivado = contieneEventoPrivado(compact);
+        if (!(esComandoCanal || esComandoPrivado)) return;
+
+        String raw = mensaje.replace('\n',' ').replace('\r',' ');
+        String payload = extraerObjetoPayload(raw);
+        if (payload == null) payload = raw;
+        String payloadMensaje = extraerPayloadMensaje(compact, payload);
+        // Log organizado para NEW_CHANNEL_MESSAGE recibido (incluye eventos empaquetados en EVENT)
+        if (esComandoCanal) {
+            Long canalId = extraerLong(payloadMensaje, "canalId");
             if (canalId == null) {
-                String canalObj = extraerObjeto(payload, "canal");
+                String canalObj = extraerObjeto(payloadMensaje, "canal");
                 if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
             }
-            Long id = extraerLong(payload, "id");
-            Long emisor = extraerLong(payload, "emisor");
-            String tipo = extraerCampo(payload, "tipo");
-            String timeStamp = extraerCampo(payload, "timeStamp");
-            String contenido = extraerCampoPermitirNulo(payload, "contenido");
-            String rutaArchivo = extraerCampo(payload, "rutaArchivo");
-            String transcripcion = extraerCampoPermitirNulo(payload, "transcripcion");
+            Long id = extraerLong(payloadMensaje, "id");
+            Long emisor = obtenerCampoLong(payloadMensaje, "emisor", "emisorId");
+            String tipo = obtenerCampoTexto(payloadMensaje, "tipo", "tipoMensaje");
+            String timeStamp = obtenerCampoTexto(payloadMensaje, "timeStamp", "timestamp");
+            String contenido = obtenerCampoTextoPermitirNulo(payloadMensaje, "contenido", "texto");
+            String rutaArchivo = obtenerCampoTexto(payloadMensaje, "rutaArchivo");
+            String transcripcion = obtenerCampoTextoPermitirNulo(payloadMensaje, "transcripcion");
             StringBuilder sb = new StringBuilder();
             sb.append("\n==== NEW_CHANNEL_MESSAGE recibido ====\n");
             sb.append("- id: ").append(id).append('\n');
@@ -90,14 +93,11 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             sb.append("- jsonCompleto: ").append(raw).append('\n');
             sb.append("====================================\n");
             System.out.println(sb.toString());
-        } else if (compact.contains("\"command\":\"NEW_MESSAGE\"")) {
-            String raw = mensaje.replace('\n',' ').replace('\r',' ');
-            String payload = extraerObjetoPayload(raw);
-            if (payload == null) payload = raw;
-            Long emisor = obtenerCampoLong(payload, "emisor", "emisorId");
-            Long receptor = obtenerCampoLong(payload, "receptor", "receptorId");
-            String tipo = obtenerCampoTexto(payload, "tipo", "tipoMensaje");
-            String contenido = obtenerCampoTextoPermitirNulo(payload, "contenido", "texto");
+        } else if (esComandoPrivado) {
+            Long emisor = obtenerCampoLong(payloadMensaje, "emisor", "emisorId");
+            Long receptor = obtenerCampoLong(payloadMensaje, "receptor", "receptorId");
+            String tipo = obtenerCampoTexto(payloadMensaje, "tipo", "tipoMensaje");
+            String contenido = obtenerCampoTextoPermitirNulo(payloadMensaje, "contenido", "texto");
             StringBuilder sb = new StringBuilder();
             sb.append("\n==== NEW_MESSAGE recibido ====\n");
             sb.append("- tipo: ").append(tipo).append('\n');
@@ -200,26 +200,27 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             String command = extraerCampo(compact, "command");
             String payload = extraerObjetoPayload(compact);
             if (payload == null) payload = compact; // fallback
-            String tipoMsg = obtenerCampoTexto(payload, "tipo", "tipoMensaje"); // TEXTO / AUDIO
-            Long emisor = obtenerCampoLong(payload, "emisor", "emisorId");
-            String emisorNombre = obtenerCampoTextoPermitirNulo(payload, "emisorNombre", "nombreEmisor", "emisor_nombre", "emisorNombreUsuario", "emisorName");
-            Long receptor = obtenerCampoLong(payload, "receptor", "receptorId");
-            String receptorNombre = obtenerCampoTextoPermitirNulo(payload, "receptorNombre", "nombreReceptor", "receptor_nombre", "receptorNombreUsuario", "receptorName");
-            Long canalId = obtenerCampoLong(payload, "canalId");
+            String payloadMensaje = extraerPayloadMensaje(compact, payload);
+            String tipoMsg = obtenerCampoTexto(payloadMensaje, "tipo", "tipoMensaje"); // TEXTO / AUDIO
+            Long emisor = obtenerCampoLong(payloadMensaje, "emisor", "emisorId");
+            String emisorNombre = obtenerCampoTextoPermitirNulo(payloadMensaje, "emisorNombre", "nombreEmisor", "emisor_nombre", "emisorNombreUsuario", "emisorName");
+            Long receptor = obtenerCampoLong(payloadMensaje, "receptor", "receptorId");
+            String receptorNombre = obtenerCampoTextoPermitirNulo(payloadMensaje, "receptorNombre", "nombreReceptor", "receptor_nombre", "receptorNombreUsuario", "receptorName");
+            Long canalId = obtenerCampoLong(payloadMensaje, "canalId");
             if (canalId == null) {
-                String canalObj = extraerObjeto(payload, "canal");
+                String canalObj = extraerObjeto(payloadMensaje, "canal");
                 if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
             }
-            Long serverId = obtenerCampoLong(payload, "id");
-            java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payload, "timeStamp", "timestamp"));
-            String tipoConversacion = obtenerCampoTexto(payload, "tipoConversacion");
-            boolean esCanal = "NEW_CHANNEL_MESSAGE".equalsIgnoreCase(command) || (canalId != null) || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
+            Long serverId = obtenerCampoLong(payloadMensaje, "id");
+            java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payloadMensaje, "timeStamp", "timestamp"));
+            String tipoConversacion = obtenerCampoTexto(payloadMensaje, "tipoConversacion");
+            boolean esCanal = contieneEventoCanal(compact) || "NEW_CHANNEL_MESSAGE".equalsIgnoreCase(command) || (canalId != null) || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
             boolean esAudio = "AUDIO".equalsIgnoreCase(tipoMsg);
 
-            String contenidoObjeto = extraerObjeto(payload, "contenido");
-            String contenidoPlano = obtenerCampoTextoPermitirNulo(payload, "contenido", "texto");
-            String ruta = obtenerCampoTexto(payload, "rutaArchivo");
-            String transcripcion = obtenerCampoTextoPermitirNulo(payload, "transcripcion");
+            String contenidoObjeto = extraerObjeto(payloadMensaje, "contenido");
+            String contenidoPlano = obtenerCampoTextoPermitirNulo(payloadMensaje, "contenido", "texto");
+            String ruta = obtenerCampoTexto(payloadMensaje, "rutaArchivo");
+            String transcripcion = obtenerCampoTextoPermitirNulo(payloadMensaje, "transcripcion");
             if (contenidoObjeto != null) {
                 if (esAudio) {
                     String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
@@ -245,7 +246,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 }
             } else { // TEXTO u otros
                 if (esCanal) {
-                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
+                        long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                     System.out.println("[ObservadorEventosChat] Texto canal insertado id=" + id + " canal=" + canalId);
                     if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
                 } else {
@@ -260,6 +261,29 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         } catch (Exception e) {
             System.out.println("[ObservadorEventosChat] Error procesando evento: " + e + " json=" + json);
         }
+    }
+
+    private static boolean contieneEventoCanal(String compact) {
+        if (compact == null) return false;
+        return compact.contains("\"command\":\"NEW_CHANNEL_MESSAGE\"") ||
+                (compact.contains("\"command\":\"EVENT\"") && compact.contains("\"tipo\":\"NEW_CHANNEL_MESSAGE\""));
+    }
+
+    private static boolean contieneEventoPrivado(String compact) {
+        if (compact == null) return false;
+        return compact.contains("\"command\":\"NEW_MESSAGE\"") ||
+                (compact.contains("\"command\":\"EVENT\"") && compact.contains("\"tipo\":\"NEW_MESSAGE\""));
+    }
+
+    private static String extraerPayloadMensaje(String compact, String payload) {
+        if (payload == null) return null;
+        if (compact != null && compact.contains("\"command\":\"EVENT\"")) {
+            String interno = extraerObjeto(payload, "mensaje");
+            if (interno == null) interno = extraerObjeto(payload, "message");
+            if (interno == null) interno = extraerObjeto(payload, "payload");
+            if (interno != null) return interno;
+        }
+        return payload;
     }
 
     private static String obtenerCampoTexto(String json, String... nombres) {
