@@ -291,44 +291,22 @@ public class RepositorioMensajes {
     private boolean intentarActualizarCoincidenciaLocal(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, boolean esAudio, String texto, String rutaArchivo, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
         boolean intentoPorRuta = esAudio && rutaArchivo != null && !rutaArchivo.isEmpty();
         int intentos = intentoPorRuta ? 2 : 1;
-        for (int intento = 0; intento < intentos; intento++) {
-            boolean usarRuta = intento == 0 && intentoPorRuta;
-            String campoComparacion = usarRuta ? "ruta_audio" : "texto";
-            String valorComparacion = usarRuta ? rutaArchivo : texto;
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion()) {
+            for (int intento = 0; intento < intentos; intento++) {
+                boolean usarRuta = intento == 0 && intentoPorRuta;
+                String campoComparacion = usarRuta ? "ruta_audio" : "texto";
+                String valorComparacion = usarRuta ? rutaArchivo : texto;
 
-            StringBuilder sql = new StringBuilder("SELECT id FROM mensajes WHERE server_id IS NULL AND emisor_id = ? AND ");
-            if (receptorId != null) {
-                sql.append("receptor_id = ? AND ");
-            } else {
-                sql.append("receptor_id IS NULL AND ");
-            }
-            if (canalId != null) {
-                sql.append("canal_id = ? AND ");
-            } else {
-                sql.append("canal_id IS NULL AND ");
-            }
-            sql.append("es_audio = ? AND ");
-            if (valorComparacion == null) {
-                sql.append(campoComparacion).append(" IS NULL ");
-            } else {
-                sql.append(campoComparacion).append(" = ? ");
-            }
-            sql.append("ORDER BY fecha_envio DESC LIMIT 1");
+                Long idEncontrado = buscarCoincidenciaLocal(cn, emisorId, receptorId, canalId, esAudio, campoComparacion, valorComparacion);
+                if (idEncontrado == null && valorComparacion != null) {
+                    // Si no se halló coincidencia exacta y el servidor nos envía información adicional
+                    // (por ejemplo, transcripción disponible solo en el servidor), intentar coincidir
+                    // con registros locales donde aún no se haya almacenado ese dato.
+                    idEncontrado = buscarCoincidenciaLocal(cn, emisorId, receptorId, canalId, esAudio, campoComparacion, null);
+                }
 
-            try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
-                 PreparedStatement ps = cn.prepareStatement(sql.toString())) {
-                int idx = 1;
-                ps.setLong(idx++, emisorId != null ? emisorId : 0L);
-                if (receptorId != null) ps.setLong(idx++, receptorId);
-                if (canalId != null) ps.setLong(idx++, canalId);
-                ps.setBoolean(idx++, esAudio);
-                if (valorComparacion != null) ps.setString(idx++, valorComparacion);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) continue;
-                    long id = rs.getLong(1);
-                    if (actualizarMensajeCoincidente(cn, id, serverId, serverTs, emisorNombre, receptorNombre, texto, audioBase64, mime, duracionSeg)) {
-                        return true;
-                    }
+                if (idEncontrado != null && actualizarMensajeCoincidente(cn, idEncontrado, serverId, serverTs, emisorNombre, receptorNombre, texto, audioBase64, mime, duracionSeg)) {
+                    return true;
                 }
             }
         }
@@ -336,6 +314,42 @@ public class RepositorioMensajes {
             return intentarActualizarCoincidenciaLocalPorRutaNormalizada(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, texto, rutaArchivo, audioBase64, mime, duracionSeg);
         }
         return false;
+    }
+
+    private Long buscarCoincidenciaLocal(Connection cn, Long emisorId, Long receptorId, Long canalId, boolean esAudio, String campoComparacion, String valorComparacion) throws SQLException {
+        StringBuilder sql = new StringBuilder("SELECT id FROM mensajes WHERE server_id IS NULL AND emisor_id = ? AND ");
+        if (receptorId != null) {
+            sql.append("receptor_id = ? AND ");
+        } else {
+            sql.append("receptor_id IS NULL AND ");
+        }
+        if (canalId != null) {
+            sql.append("canal_id = ? AND ");
+        } else {
+            sql.append("canal_id IS NULL AND ");
+        }
+        sql.append("es_audio = ? AND ");
+        if (valorComparacion == null) {
+            sql.append(campoComparacion).append(" IS NULL ");
+        } else {
+            sql.append(campoComparacion).append(" = ? ");
+        }
+        sql.append("ORDER BY fecha_envio DESC LIMIT 1");
+
+        try (PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+            int idx = 1;
+            ps.setLong(idx++, emisorId != null ? emisorId : 0L);
+            if (receptorId != null) ps.setLong(idx++, receptorId);
+            if (canalId != null) ps.setLong(idx++, canalId);
+            ps.setBoolean(idx++, esAudio);
+            if (valorComparacion != null) ps.setString(idx++, valorComparacion);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        }
+        return null;
     }
 
     private boolean intentarActualizarCoincidenciaLocalPorRutaNormalizada(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String texto, String rutaArchivo, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
