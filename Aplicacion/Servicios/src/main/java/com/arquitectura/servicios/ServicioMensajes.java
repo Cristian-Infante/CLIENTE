@@ -44,11 +44,7 @@ public class ServicioMensajes {
         }
         long id = repositorio.insertarMensajeTexto(emisorId, emisorNombre, receptorId, receptorNombre, null, contenido, tipo != null ? tipo : "TEXTO");
         System.out.println("[ServicioMensajes] Texto privado insertado id=" + id + " receptor=" + receptorId);
-        try {
-            var eventos = com.arquitectura.servicios.ServicioEventosMensajes.instancia();
-            if (receptorId != null) eventos.notificarPrivado(receptorId);
-            if (emisorId != null && !emisorId.equals(receptorId)) eventos.notificarPrivado(emisorId);
-        } catch (Exception ignored) {}
+        try { com.arquitectura.servicios.ServicioEventosMensajes.instancia().notificarPrivado(receptorId); } catch (Exception ignored) {}
         return id;
     }
 
@@ -77,11 +73,7 @@ public class ServicioMensajes {
         }
         long id = repositorio.insertarMensajeAudio(emisorId, emisorNombre, receptorId, receptorNombre, null, transcripcion, tipo != null ? tipo : "AUDIO");
         System.out.println("[ServicioMensajes] Audio privado insertado id=" + id + " receptor=" + receptorId);
-        try {
-            var eventos = com.arquitectura.servicios.ServicioEventosMensajes.instancia();
-            if (receptorId != null) eventos.notificarPrivado(receptorId);
-            if (emisorId != null && !emisorId.equals(receptorId)) eventos.notificarPrivado(emisorId);
-        } catch (Exception ignored) {}
+        try { com.arquitectura.servicios.ServicioEventosMensajes.instancia().notificarPrivado(receptorId); } catch (Exception ignored) {}
         return id;
     }
 
@@ -111,11 +103,7 @@ public class ServicioMensajes {
         }
         long id = repositorio.insertarMensajeAudioConRuta(emisorId, emisorNombre, receptorId, receptorNombre, null, null, "AUDIO", rutaArchivo, audioBase64, mime, duracionSeg);
         System.out.println("[ServicioMensajes] AudioArchivo privado insertado id=" + id + " receptor=" + receptorId);
-        try {
-            var eventos = com.arquitectura.servicios.ServicioEventosMensajes.instancia();
-            if (receptorId != null) eventos.notificarPrivado(receptorId);
-            if (emisorId != null && !emisorId.equals(receptorId)) eventos.notificarPrivado(emisorId);
-        } catch (Exception ignored) {}
+        try { com.arquitectura.servicios.ServicioEventosMensajes.instancia().notificarPrivado(receptorId); } catch (Exception ignored) {}
         return id;
     }
 }
