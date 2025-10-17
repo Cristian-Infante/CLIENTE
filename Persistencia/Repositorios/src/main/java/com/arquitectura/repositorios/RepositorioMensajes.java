@@ -100,6 +100,7 @@ public class RepositorioMensajes {
                     boolean esAudio = rs.getBoolean(9);
                     if (esAudio) {
                         String ruta = rs.getString(11);
+                        String transcripcion = rs.getString(10);
                         com.arquitectura.entidades.AudioMensajeLocal a = new com.arquitectura.entidades.AudioMensajeLocal();
                         a.setId(id);
                         a.setTimeStamp(ts != null ? ts.toLocalDateTime() : null);
@@ -110,6 +111,7 @@ public class RepositorioMensajes {
                         a.setReceptorNombre(receptorNombre);
                         a.setCanalId(canal);
                         a.setRutaArchivo(ruta);
+                        a.setTranscripcion(transcripcion);
                         res.add(a);
                     } else {
                         String texto = rs.getString(10);
@@ -156,6 +158,7 @@ public class RepositorioMensajes {
                     boolean esAudio = rs.getBoolean(9);
                     if (esAudio) {
                         String ruta = rs.getString(11);
+                        String transcripcion = rs.getString(10);
                         com.arquitectura.entidades.AudioMensajeLocal a = new com.arquitectura.entidades.AudioMensajeLocal();
                         a.setId(id);
                         a.setTimeStamp(ts != null ? ts.toLocalDateTime() : null);
@@ -165,6 +168,7 @@ public class RepositorioMensajes {
                         a.setReceptor(receptor);
                         a.setReceptorNombre(receptorNombre);
                         a.setRutaArchivo(ruta);
+                        a.setTranscripcion(transcripcion);
                         res.add(a);
                     } else {
                         String texto = rs.getString(10);
@@ -305,12 +309,13 @@ public class RepositorioMensajes {
                     if (!rs.next()) continue;
                     long id = rs.getLong(1);
                     try (PreparedStatement up = cn.prepareStatement(
-                            "UPDATE mensajes SET server_id = ?, server_ts = ?, emisor_nombre = COALESCE(emisor_nombre, ?), receptor_nombre = COALESCE(receptor_nombre, ?) WHERE id = ?")) {
+                            "UPDATE mensajes SET server_id = ?, server_ts = ?, emisor_nombre = COALESCE(emisor_nombre, ?), receptor_nombre = COALESCE(receptor_nombre, ?), texto = COALESCE(texto, ?) WHERE id = ?")) {
                         up.setLong(1, serverId);
                         if (serverTs != null) up.setTimestamp(2, serverTs); else up.setNull(2, Types.TIMESTAMP);
                         if (emisorNombre != null) up.setString(3, emisorNombre); else up.setNull(3, Types.VARCHAR);
                         if (receptorNombre != null) up.setString(4, receptorNombre); else up.setNull(4, Types.VARCHAR);
-                        up.setLong(5, id);
+                        if (texto != null) up.setString(5, texto); else up.setNull(5, Types.CLOB);
+                        up.setLong(6, id);
                         return up.executeUpdate() > 0;
                     }
                 }

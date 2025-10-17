@@ -9,7 +9,7 @@ import java.io.*;
 
 /**
  * Diálogo básico para grabar, reproducir y enviar audio.
- * - Graba audio PCM 16-bit mono 44.1kHz.
+ * - Graba audio PCM 16-bit mono 16kHz.
  * - Guarda en un archivo WAV temporal para facilitar reproducción/envío.
  */
 public class DialogoGrabacionAudio extends JDialog {
@@ -91,7 +91,7 @@ public class DialogoGrabacionAudio extends JDialog {
 
     private void iniciarGrabacion() {
         try {
-            formato = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 44100f, 16, 1, 2, 44100f, false);
+            formato = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 16000f, 16, 1, 2, 16000f, false);
             DataLine.Info info = new DataLine.Info(TargetDataLine.class, formato);
             if (!AudioSystem.isLineSupported(info)) {
                 mostrarError("Entrada de audio no soportada");

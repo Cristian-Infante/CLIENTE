@@ -104,6 +104,34 @@ public class ServicioComandosChat {
         return enviar("SEND_CHANNEL", p);
     }
 
+    public RespuestaUploadAudio subirAudio(String audioBase64, String mime, Integer duracionSeg, String nombreArchivo, long timeoutMs) {
+        Map<String, Object> p = ProtocoloChat.mapa();
+        if (audioBase64 != null) p.put("audioBase64", audioBase64);
+        if (mime != null) p.put("mime", mime);
+        if (duracionSeg != null) p.put("duracionSeg", duracionSeg);
+        if (nombreArchivo != null && !nombreArchivo.isBlank()) p.put("nombreArchivo", nombreArchivo);
+        if (!enviar("UPLOAD_AUDIO", p)) {
+            return RespuestaUploadAudio.error("No se pudo enviar el audio al servidor");
+        }
+        String respuesta = conexion.esperarRespuesta("UPLOAD_AUDIO", timeoutMs);
+        if (respuesta == null) {
+            return RespuestaUploadAudio.error("El servidor no respondió al subir el audio");
+        }
+        if (respuesta.contains("\"command\":\"ERROR\"")) {
+            String mensajeError = extraerCampoTexto(respuesta, "message");
+            if (mensajeError == null) mensajeError = extraerCampoTexto(respuesta, "mensaje");
+            return RespuestaUploadAudio.error(mensajeError != null ? mensajeError : "Servidor devolvió un error");
+        }
+        boolean esRespuestaEsperada = respuesta.contains("\"command\":\"UPLOAD_AUDIO\"");
+        if (!esRespuestaEsperada) {
+            return RespuestaUploadAudio.error("Respuesta inesperada del servidor al subir audio");
+        }
+        Boolean exito = extraerCampoBooleano(respuesta, "exito");
+        String ruta = extraerCampoTexto(respuesta, "rutaArchivo");
+        String mensaje = extraerCampoTexto(respuesta, "mensaje");
+        return new RespuestaUploadAudio(Boolean.TRUE.equals(exito), ruta, mensaje);
+    }
+
     // Canales
     public boolean crearCanal(String nombre, boolean privado) {
         Map<String, Object> p = ProtocoloChat.mapa();
@@ -379,6 +407,42 @@ public class ServicioComandosChat {
             if (m.find()) {
                 return m.group(1);
             }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public static class RespuestaUploadAudio {
+        public final boolean exito;
+        public final String rutaArchivo;
+        public final String mensaje;
+
+        public RespuestaUploadAudio(boolean exito, String rutaArchivo, String mensaje) {
+            this.exito = exito;
+            this.rutaArchivo = rutaArchivo;
+            this.mensaje = mensaje;
+        }
+
+        public static RespuestaUploadAudio error(String mensaje) {
+            return new RespuestaUploadAudio(false, null, mensaje);
+        }
+    }
+
+    private static String extraerCampoTexto(String jsonLinea, String campo) {
+        if (jsonLinea == null || campo == null) return null;
+        try {
+            Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*\\\"(.*?)\\\"");
+            Matcher m = p.matcher(jsonLinea);
+            if (m.find()) return m.group(1);
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private static Boolean extraerCampoBooleano(String jsonLinea, String campo) {
+        if (jsonLinea == null || campo == null) return null;
+        try {
+            Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(true|false)");
+            Matcher m = p.matcher(jsonLinea);
+            if (m.find()) return Boolean.parseBoolean(m.group(1));
         } catch (Exception ignored) {}
         return null;
     }
