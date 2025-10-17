@@ -624,10 +624,9 @@ public class VistaChatPrincipal extends JFrame {
     }
 
     private JPanel construirPanelMensaje(MensajeLocal mensaje) {
-        boolean soyYo = mensaje.getEmisor() != null && mensaje.getEmisor().equals(usuarioActual.getId());
         String hora = mensaje.getTimeStamp() != null ? mensaje.getTimeStamp().toLocalTime().toString() : java.time.LocalTime.now().toString();
         if (hora.length() > 5) hora = hora.substring(0, 5);
-        String nombre = soyYo ? "Yo" : obtenerNombreEmisor(mensaje);
+        String nombre = obtenerNombreEmisor(mensaje);
 
         JPanel fila = new JPanel(new BorderLayout());
         fila.setOpaque(false);
@@ -636,12 +635,12 @@ public class VistaChatPrincipal extends JFrame {
         JPanel burbuja = new JPanel();
         burbuja.setLayout(new BoxLayout(burbuja, BoxLayout.Y_AXIS));
         burbuja.setOpaque(true);
-        burbuja.setBackground(soyYo ? new Color(220, 248, 198) : new Color(245, 245, 245));
+        burbuja.setBackground(new Color(245, 245, 245));
         burbuja.setBorder(javax.swing.BorderFactory.createCompoundBorder(
                 new LineBorder(new Color(210, 210, 210), 1, true),
                 new EmptyBorder(8, 12, 8, 12)
         ));
-        burbuja.setAlignmentX(soyYo ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
+        burbuja.setAlignmentX(Component.LEFT_ALIGNMENT);
         burbuja.setMaximumSize(new Dimension(600, Integer.MAX_VALUE));
 
         JLabel lblEncabezado = new JLabel("[" + hora + "] " + nombre);
@@ -668,11 +667,7 @@ public class VistaChatPrincipal extends JFrame {
             burbuja.add(crearTextoMultilinea("Tipo " + (mensaje.getTipo() != null ? mensaje.getTipo() : "desconocido")));
         }
 
-        if (soyYo) {
-            fila.add(burbuja, BorderLayout.EAST);
-        } else {
-            fila.add(burbuja, BorderLayout.WEST);
-        }
+        fila.add(burbuja, BorderLayout.WEST);
 
         return fila;
     }
