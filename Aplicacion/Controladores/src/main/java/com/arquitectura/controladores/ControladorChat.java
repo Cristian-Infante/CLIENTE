@@ -1,6 +1,9 @@
 package com.arquitectura.controladores;
 
+import com.arquitectura.entidades.AudioMensajeLocal;
 import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.entidades.MensajeLocal;
+import com.arquitectura.entidades.TextoMensajeLocal;
 import com.arquitectura.repositorios.RepositorioMensajes;
 import com.arquitectura.servicios.ServicioComandosChat;
 import com.arquitectura.servicios.ServicioConexionChat;
@@ -64,81 +67,88 @@ public class ControladorChat {
     }
 
     public List<String> obtenerConversacion(Long usuarioId) {
+        return convertirMensajesAString(obtenerConversacionDetallada(usuarioId));
+    }
+
+    public List<String> obtenerMensajesCanal(Long canalId) {
+        return convertirMensajesAString(obtenerMensajesCanalDetallados(canalId));
+    }
+
+    public List<MensajeLocal> obtenerConversacionDetallada(Long usuarioId) {
         try {
-            var repo = new com.arquitectura.repositorios.RepositorioMensajes();
-            java.util.List<com.arquitectura.entidades.MensajeLocal> msgs = repo.listarMensajesPrivados(clienteActual.getId(), usuarioId, null);
-            java.util.List<String> lines = new java.util.ArrayList<>();
-            if (msgs != null) {
-                for (var m : msgs) {
-                    String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
-                    if (ts.length() > 5) ts = ts.substring(0, 5);
-                    boolean soyYo = m.getEmisor() != null && m.getEmisor().equals(clienteActual.getId());
-                    String prefix;
-                    if (soyYo) {
-                        prefix = "Yo";
-                    } else {
-                        String nombre = normalizarNombreEmisor(m.getEmisor(), m.getEmisorNombre());
-                        prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
-                    }
-                    if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
-                        lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
-                    } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
-                        StringBuilder sb = new StringBuilder("[" + ts + "] " + prefix + ": [Audio]");
-                        if (a.getRutaArchivo() != null && !a.getRutaArchivo().isBlank()) {
-                            sb.append(' ').append(a.getRutaArchivo());
-                        }
-                        if (a.getTranscripcion() != null && !a.getTranscripcion().isBlank()) {
-                            sb.append(" — \"").append(a.getTranscripcion()).append("\"");
-                        }
-                        lines.add(sb.toString());
-                    } else {
-                        lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
-                    }
-                }
-            }
-            return lines;
+            var repo = new RepositorioMensajes();
+            List<MensajeLocal> mensajes = repo.listarMensajesPrivados(clienteActual.getId(), usuarioId, null);
+            return completarNombres(mensajes);
         } catch (Exception e) {
             return java.util.List.of();
         }
     }
 
-    public List<String> obtenerMensajesCanal(Long canalId) {
+    public List<MensajeLocal> obtenerMensajesCanalDetallados(Long canalId) {
         try {
-            var repo = new com.arquitectura.repositorios.RepositorioMensajes();
-            java.util.List<com.arquitectura.entidades.MensajeLocal> msgs = repo.listarMensajesDeCanal(canalId, null);
-            java.util.List<String> lines = new java.util.ArrayList<>();
-            if (msgs != null) {
-                for (var m : msgs) {
-                    String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
-                    if (ts.length() > 5) ts = ts.substring(0, 5);
-                    boolean soyYo = m.getEmisor() != null && m.getEmisor().equals(clienteActual.getId());
-                    String prefix;
-                    if (soyYo) {
-                        prefix = "Yo";
-                    } else {
-                        String nombre = normalizarNombreEmisor(m.getEmisor(), m.getEmisorNombre());
-                        prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
-                    }
-                    if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
-                        lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
-                    } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
-                        StringBuilder sb = new StringBuilder("[" + ts + "] " + prefix + ": [Audio]");
-                        if (a.getRutaArchivo() != null && !a.getRutaArchivo().isBlank()) {
-                            sb.append(' ').append(a.getRutaArchivo());
-                        }
-                        if (a.getTranscripcion() != null && !a.getTranscripcion().isBlank()) {
-                            sb.append(" — \"").append(a.getTranscripcion()).append("\"");
-                        }
-                        lines.add(sb.toString());
-                    } else {
-                        lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
-                    }
-                }
-            }
-            return lines;
+            var repo = new RepositorioMensajes();
+            List<MensajeLocal> mensajes = repo.listarMensajesDeCanal(canalId, null);
+            return completarNombres(mensajes);
         } catch (Exception e) {
             return java.util.List.of();
         }
+    }
+
+    private List<String> convertirMensajesAString(List<MensajeLocal> mensajes) {
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        if (mensajes == null) {
+            return lines;
+        }
+        for (MensajeLocal m : mensajes) {
+            if (m == null) continue;
+            String ts = m.getTimeStamp() != null ? m.getTimeStamp().toLocalTime().toString() : "";
+            if (ts.length() > 5) ts = ts.substring(0, 5);
+            boolean soyYo = m.getEmisor() != null && m.getEmisor().equals(clienteActual.getId());
+            String prefix;
+            if (soyYo) {
+                prefix = "Yo";
+            } else {
+                String nombre = normalizarNombreEmisor(m.getEmisor(), m.getEmisorNombre());
+                prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
+            }
+            if (m instanceof TextoMensajeLocal t) {
+                lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
+            } else if (m instanceof AudioMensajeLocal a) {
+                StringBuilder sb = new StringBuilder("[" + ts + "] " + prefix + ": [Audio]");
+                if (a.getRutaArchivo() != null && !a.getRutaArchivo().isBlank()) {
+                    sb.append(' ').append(a.getRutaArchivo());
+                }
+                if (a.getTranscripcion() != null && !a.getTranscripcion().isBlank()) {
+                    sb.append(" — \"").append(a.getTranscripcion()).append("\"");
+                }
+                lines.add(sb.toString());
+            } else {
+                lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
+            }
+        }
+        return lines;
+    }
+
+    private List<MensajeLocal> completarNombres(List<MensajeLocal> mensajes) {
+        if (mensajes == null) {
+            return java.util.List.of();
+        }
+        for (MensajeLocal mensaje : mensajes) {
+            if (mensaje == null) {
+                continue;
+            }
+            if (mensaje.getEmisorNombre() != null && !mensaje.getEmisorNombre().isBlank()) {
+                if (mensaje.getEmisor() != null) {
+                    cacheNombres.putIfAbsent(mensaje.getEmisor(), mensaje.getEmisorNombre());
+                }
+            } else {
+                String nombre = normalizarNombreEmisor(mensaje.getEmisor(), mensaje.getEmisorNombre());
+                if (nombre != null && !nombre.isBlank()) {
+                    mensaje.setEmisorNombre(nombre);
+                }
+            }
+        }
+        return mensajes;
     }
 
     private String normalizarNombreEmisor(Long emisorId, String nombreOriginal) {
