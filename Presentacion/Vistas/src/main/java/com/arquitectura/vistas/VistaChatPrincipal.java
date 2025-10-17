@@ -3,17 +3,32 @@ package com.arquitectura.vistas;
 import com.arquitectura.controladores.ControladorAudio;
 import com.arquitectura.controladores.ControladorCanal;
 import com.arquitectura.controladores.ControladorChat;
+import com.arquitectura.entidades.AudioMensajeLocal;
 import com.arquitectura.entidades.CanalLocal;
 import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.entidades.MensajeLocal;
+import com.arquitectura.entidades.TextoMensajeLocal;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ObservadorEventosChat;
 import com.arquitectura.infra.net.OyenteMensajesChat;
 import com.arquitectura.servicios.OyenteActualizacionMensajes;
 import com.arquitectura.servicios.ServicioEventosMensajes;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.Base64;
 
 public class VistaChatPrincipal extends JFrame {
     private final ClienteLocal usuarioActual;
@@ -46,7 +61,8 @@ public class VistaChatPrincipal extends JFrame {
     private JList<CanalLocal> listaCanales;
 
     // Panel central - Chat
-    private JTextArea areaMensajes;
+    private JPanel contenedorMensajes;
+    private JScrollPane scrollMensajes;
     private JTextField txtMensaje;
     private JButton btnEnviar;
     private JButton btnGrabador;
@@ -249,11 +265,14 @@ public class VistaChatPrincipal extends JFrame {
         lblDestinatario.setFont(new Font("Arial", Font.BOLD, 14));
         panelEncabezado.add(lblDestinatario, BorderLayout.CENTER);
 
-        areaMensajes = new JTextArea();
-        areaMensajes.setEditable(false);
-        areaMensajes.setLineWrap(true);
-        areaMensajes.setWrapStyleWord(true);
-        JScrollPane scrollMensajes = new JScrollPane(areaMensajes);
+        contenedorMensajes = new JPanel();
+        contenedorMensajes.setLayout(new BoxLayout(contenedorMensajes, BoxLayout.Y_AXIS));
+        contenedorMensajes.setBackground(Color.WHITE);
+        contenedorMensajes.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        scrollMensajes = new JScrollPane(contenedorMensajes);
+        scrollMensajes.getVerticalScrollBar().setUnitIncrement(16);
+        scrollMensajes.getViewport().setBackground(Color.WHITE);
 
         JPanel panelEntrada = new JPanel(new BorderLayout(5, 5));
         panelEntrada.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -304,14 +323,11 @@ public class VistaChatPrincipal extends JFrame {
         canalSeleccionado = null;
         if (usuarioSeleccionado != null) {
             lblDestinatario.setText("Destino: " + usuarioSeleccionado.getNombreDeUsuario());
-            areaMensajes.setText("");
+            limpiarMensajes();
             mostrarInfoUsuario();
             // Cargar historial privado local
-            java.util.List<String> hist = chatController.obtenerConversacion(usuarioSeleccionado.getId());
-            if (hist != null) {
-                for (String l : hist) areaMensajes.append(l + "\n");
-                areaMensajes.setCaretPosition(areaMensajes.getDocument().getLength());
-            }
+            java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(usuarioSeleccionado.getId());
+            mostrarMensajes(hist);
             subscribirActualizacionesPrivado(usuarioSeleccionado.getId());
         }
     }
@@ -321,16 +337,11 @@ public class VistaChatPrincipal extends JFrame {
         usuarioSeleccionado = null;
         if (canalSeleccionado != null) {
             lblDestinatario.setText("Canal: " + canalSeleccionado.getNombre());
-            areaMensajes.setText("");
+            limpiarMensajes();
             mostrarInfoCanal();
             // Cargar historial local del canal desde H2
-            java.util.List<String> historial = chatController.obtenerMensajesCanal(canalSeleccionado.getId());
-            if (historial != null) {
-                for (String linea : historial) {
-                    areaMensajes.append(linea + "\n");
-                }
-                areaMensajes.setCaretPosition(areaMensajes.getDocument().getLength());
-            }
+            java.util.List<MensajeLocal> historial = chatController.obtenerMensajesCanalDetallados(canalSeleccionado.getId());
+            mostrarMensajes(historial);
             // Suscribir actualización en caliente para este canal
             subscribirActualizacionesCanal(canalSeleccionado.getId());
         }
@@ -345,11 +356,10 @@ public class VistaChatPrincipal extends JFrame {
             @Override public void onCanalActualizado(Long id) {
                 if (id == null || canalSeleccionado == null) return;
                 if (!id.equals(canalSeleccionado.getId())) return;
-                java.util.List<String> hist = chatController.obtenerMensajesCanal(id);
+                java.util.List<MensajeLocal> hist = chatController.obtenerMensajesCanalDetallados(id);
                 javax.swing.SwingUtilities.invokeLater(() -> {
-                    areaMensajes.setText("");
-                    if (hist != null) for (String l : hist) areaMensajes.append(l + "\n");
-                    areaMensajes.setCaretPosition(areaMensajes.getDocument().getLength());
+                    limpiarMensajes();
+                    mostrarMensajes(hist);
                 });
             }
         };
@@ -365,11 +375,10 @@ public class VistaChatPrincipal extends JFrame {
             @Override public void onPrivadoActualizado(Long id) {
                 if (id == null || usuarioSeleccionado == null) return;
                 if (!id.equals(usuarioSeleccionado.getId())) return;
-                java.util.List<String> hist = chatController.obtenerConversacion(id);
+                java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(id);
                 javax.swing.SwingUtilities.invokeLater(() -> {
-                    areaMensajes.setText("");
-                    if (hist != null) for (String l : hist) areaMensajes.append(l + "\n");
-                    areaMensajes.setCaretPosition(areaMensajes.getDocument().getLength());
+                    limpiarMensajes();
+                    mostrarMensajes(hist);
                 });
             }
         };
@@ -390,7 +399,7 @@ public class VistaChatPrincipal extends JFrame {
             enviado = chatController.enviarMensajeCanal(canalSeleccionado.getId(), canalSeleccionado.getNombre(), texto);
         }
         if (enviado) {
-            mostrarMensajeEnChat("Yo: " + texto);
+            agregarMensajeTemporalTexto(texto);
             txtMensaje.setText("");
         } else {
             JOptionPane.showMessageDialog(this, "Error al enviar", "Error", JOptionPane.ERROR_MESSAGE);
@@ -433,7 +442,7 @@ public class VistaChatPrincipal extends JFrame {
             SwingUtilities.invokeLater(() -> {
                 if (resFinal != null && resFinal.exito) {
                     String ruta = resFinal.rutaArchivo != null ? resFinal.rutaArchivo : "";
-                    mostrarMensajeEnChat("Yo: [Audio] " + ruta);
+                    agregarMensajeTemporalAudio(ruta, resFinal.duracionSegundos, Base64.getEncoder().encodeToString(datosWav));
                     if (resFinal.mensaje != null && !resFinal.mensaje.isBlank()) {
                         JOptionPane.showMessageDialog(this, resFinal.mensaje, "Audio enviado", JOptionPane.INFORMATION_MESSAGE);
                     }
@@ -587,12 +596,244 @@ public class VistaChatPrincipal extends JFrame {
         });
     }
 
-    private void mostrarMensajeEnChat(String linea) {
-        if (linea == null) return;
-        String timestamp = java.time.LocalTime.now().toString();
-        if (timestamp.length() > 5) timestamp = timestamp.substring(0, 5);
-        areaMensajes.append("[" + timestamp + "] " + linea + "\n");
-        areaMensajes.setCaretPosition(areaMensajes.getDocument().getLength());
+    private void limpiarMensajes() {
+        if (contenedorMensajes == null) return;
+        contenedorMensajes.removeAll();
+        contenedorMensajes.revalidate();
+        contenedorMensajes.repaint();
+    }
+
+    private void mostrarMensajes(java.util.List<? extends MensajeLocal> mensajes) {
+        if (contenedorMensajes == null) return;
+        contenedorMensajes.removeAll();
+        if (mensajes != null) {
+            for (MensajeLocal mensaje : mensajes) {
+                agregarMensajeVisual(mensaje);
+            }
+        }
+        contenedorMensajes.revalidate();
+        contenedorMensajes.repaint();
+        desplazarAlFinal();
+    }
+
+    private void agregarMensajeVisual(MensajeLocal mensaje) {
+        if (mensaje == null || contenedorMensajes == null) return;
+        JPanel fila = construirPanelMensaje(mensaje);
+        contenedorMensajes.add(fila);
+        contenedorMensajes.add(Box.createVerticalStrut(8));
+    }
+
+    private JPanel construirPanelMensaje(MensajeLocal mensaje) {
+        boolean soyYo = mensaje.getEmisor() != null && mensaje.getEmisor().equals(usuarioActual.getId());
+        String hora = mensaje.getTimeStamp() != null ? mensaje.getTimeStamp().toLocalTime().toString() : java.time.LocalTime.now().toString();
+        if (hora.length() > 5) hora = hora.substring(0, 5);
+        String nombre = soyYo ? "Yo" : obtenerNombreEmisor(mensaje);
+
+        JPanel fila = new JPanel(new BorderLayout());
+        fila.setOpaque(false);
+        fila.setBorder(new EmptyBorder(0, 5, 0, 5));
+
+        JPanel burbuja = new JPanel();
+        burbuja.setLayout(new BoxLayout(burbuja, BoxLayout.Y_AXIS));
+        burbuja.setOpaque(true);
+        burbuja.setBackground(soyYo ? new Color(220, 248, 198) : new Color(245, 245, 245));
+        burbuja.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(210, 210, 210), 1, true),
+                new EmptyBorder(8, 12, 8, 12)
+        ));
+        burbuja.setAlignmentX(soyYo ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
+        burbuja.setMaximumSize(new Dimension(600, Integer.MAX_VALUE));
+
+        JLabel lblEncabezado = new JLabel("[" + hora + "] " + nombre);
+        lblEncabezado.setAlignmentX(Component.LEFT_ALIGNMENT);
+        lblEncabezado.setFont(lblEncabezado.getFont().deriveFont(Font.BOLD, 12f));
+        burbuja.add(lblEncabezado);
+
+        if (mensaje instanceof TextoMensajeLocal texto) {
+            burbuja.add(Box.createVerticalStrut(4));
+            burbuja.add(crearTextoMultilinea(texto.getContenido()));
+        } else if (mensaje instanceof AudioMensajeLocal audio) {
+            burbuja.add(Box.createVerticalStrut(6));
+            MensajeAudioPanel panelAudio = new MensajeAudioPanel(audio);
+            panelAudio.setAlignmentX(Component.LEFT_ALIGNMENT);
+            burbuja.add(panelAudio);
+            if (audio.getTranscripcion() != null && !audio.getTranscripcion().isBlank()) {
+                burbuja.add(Box.createVerticalStrut(4));
+                JTextArea trans = crearTextoMultilinea("Transcripción: " + audio.getTranscripcion());
+                trans.setFont(trans.getFont().deriveFont(Font.ITALIC, trans.getFont().getSize2D()));
+                burbuja.add(trans);
+            }
+        } else {
+            burbuja.add(Box.createVerticalStrut(4));
+            burbuja.add(crearTextoMultilinea("Tipo " + (mensaje.getTipo() != null ? mensaje.getTipo() : "desconocido")));
+        }
+
+        if (soyYo) {
+            fila.add(burbuja, BorderLayout.EAST);
+        } else {
+            fila.add(burbuja, BorderLayout.WEST);
+        }
+
+        return fila;
+    }
+
+    private String obtenerNombreEmisor(MensajeLocal mensaje) {
+        if (mensaje == null) return "?";
+        String nombre = mensaje.getEmisorNombre();
+        if (nombre != null && !nombre.isBlank()) return nombre;
+        Long emisor = mensaje.getEmisor();
+        return emisor != null ? ("#" + emisor) : "?";
+    }
+
+    private JTextArea crearTextoMultilinea(String texto) {
+        JTextArea area = new JTextArea(texto != null ? texto : "");
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setEditable(false);
+        area.setOpaque(false);
+        area.setBorder(null);
+        area.setAlignmentX(Component.LEFT_ALIGNMENT);
+        area.setFont(area.getFont().deriveFont(13f));
+        return area;
+    }
+
+    private void agregarMensajeTemporalTexto(String texto) {
+        TextoMensajeLocal mensaje = new TextoMensajeLocal();
+        mensaje.setTimeStamp(LocalDateTime.now());
+        mensaje.setEmisor(usuarioActual.getId());
+        mensaje.setEmisorNombre(usuarioActual.getNombreDeUsuario());
+        mensaje.setContenido(texto);
+        agregarMensajeVisual(mensaje);
+        contenedorMensajes.revalidate();
+        contenedorMensajes.repaint();
+        desplazarAlFinal();
+    }
+
+    private void agregarMensajeTemporalAudio(String ruta, int duracionSeg, String audioBase64) {
+        AudioMensajeLocal mensaje = new AudioMensajeLocal();
+        mensaje.setTimeStamp(LocalDateTime.now());
+        mensaje.setEmisor(usuarioActual.getId());
+        mensaje.setEmisorNombre(usuarioActual.getNombreDeUsuario());
+        mensaje.setRutaArchivo(ruta);
+        mensaje.setDuracionSeg(Math.max(duracionSeg, 0));
+        mensaje.setAudioBase64(audioBase64);
+        mensaje.setMime("audio/wav");
+        agregarMensajeVisual(mensaje);
+        contenedorMensajes.revalidate();
+        contenedorMensajes.repaint();
+        desplazarAlFinal();
+    }
+
+    private void desplazarAlFinal() {
+        if (scrollMensajes == null) return;
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar barra = scrollMensajes.getVerticalScrollBar();
+            if (barra != null) {
+                barra.setValue(barra.getMaximum());
+            }
+        });
+    }
+
+    private static String formatearDuracion(Integer duracionSeg) {
+        if (duracionSeg == null || duracionSeg <= 0) return "";
+        int minutos = duracionSeg / 60;
+        int segundos = duracionSeg % 60;
+        return String.format("%02d:%02d", minutos, segundos);
+    }
+
+    private class MensajeAudioPanel extends JPanel {
+        private Clip clip;
+        private final JButton btnReproducir;
+        private final byte[] audioBytes;
+        private boolean deteniendo = false;
+
+        MensajeAudioPanel(AudioMensajeLocal audio) {
+            setLayout(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            setOpaque(false);
+            this.audioBytes = decodificarAudio(audio != null ? audio.getAudioBase64() : null);
+            btnReproducir = new JButton("▶ Reproducir");
+            btnReproducir.addActionListener(e -> alternarReproduccion());
+            add(btnReproducir);
+
+            String duracion = formatearDuracion(audio != null ? audio.getDuracionSeg() : null);
+            JLabel lblDuracion = new JLabel(duracion.isEmpty() ? "" : ("Duración: " + duracion));
+            lblDuracion.setForeground(Color.DARK_GRAY);
+            add(lblDuracion);
+
+            if (audio != null && audio.getRutaArchivo() != null && !audio.getRutaArchivo().isBlank()) {
+                JLabel lblRuta = new JLabel(audio.getRutaArchivo());
+                lblRuta.setForeground(Color.GRAY);
+                add(lblRuta);
+            }
+
+            if (audioBytes == null || audioBytes.length == 0) {
+                btnReproducir.setEnabled(false);
+                btnReproducir.setText("Audio no disponible");
+            }
+        }
+
+        private void alternarReproduccion() {
+            if (clip != null) {
+                detener();
+            } else {
+                reproducir();
+            }
+        }
+
+        private void reproducir() {
+            if (audioBytes == null || audioBytes.length == 0) {
+                return;
+            }
+            detener();
+            try (AudioInputStream ais = AudioSystem.getAudioInputStream(new BufferedInputStream(new ByteArrayInputStream(audioBytes)))) {
+                clip = AudioSystem.getClip();
+                clip.addLineListener(event -> {
+                    if (event.getType() == LineEvent.Type.STOP || event.getType() == LineEvent.Type.CLOSE) {
+                        if (!deteniendo) {
+                            SwingUtilities.invokeLater(this::detener);
+                        }
+                    }
+                });
+                clip.open(ais);
+                clip.start();
+                btnReproducir.setText("■ Detener");
+            } catch (UnsupportedAudioFileException | IOException | LineUnavailableException ex) {
+                detener();
+                JOptionPane.showMessageDialog(VistaChatPrincipal.this,
+                        "No se pudo reproducir el audio: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+
+        private void detener() {
+            if (clip != null) {
+                deteniendo = true;
+                try {
+                    clip.stop();
+                } catch (Exception ignored) {}
+                try {
+                    clip.close();
+                } catch (Exception ignored) {}
+                clip = null;
+                deteniendo = false;
+            }
+            if (audioBytes != null && audioBytes.length > 0) {
+                btnReproducir.setText("▶ Reproducir");
+            } else {
+                btnReproducir.setText("Audio no disponible");
+            }
+        }
+
+        private byte[] decodificarAudio(String base64) {
+            if (base64 == null || base64.isBlank()) {
+                return new byte[0];
+            }
+            try {
+                return Base64.getDecoder().decode(base64);
+            } catch (IllegalArgumentException e) {
+                return new byte[0];
+            }
+        }
     }
 
     static class UsuarioListRenderer extends DefaultListCellRenderer {
