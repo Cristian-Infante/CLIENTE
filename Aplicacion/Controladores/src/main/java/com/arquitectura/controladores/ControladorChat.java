@@ -83,7 +83,14 @@ public class ControladorChat {
                     if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
                         lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
                     } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
-                        lines.add("[" + ts + "] " + prefix + ": [Audio] " + (a.getRutaArchivo() != null ? a.getRutaArchivo() : ""));
+                        StringBuilder sb = new StringBuilder("[" + ts + "] " + prefix + ": [Audio]");
+                        if (a.getRutaArchivo() != null && !a.getRutaArchivo().isBlank()) {
+                            sb.append(' ').append(a.getRutaArchivo());
+                        }
+                        if (a.getTranscripcion() != null && !a.getTranscripcion().isBlank()) {
+                            sb.append(" — \"").append(a.getTranscripcion()).append("\"");
+                        }
+                        lines.add(sb.toString());
                     } else {
                         lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
                     }
@@ -115,7 +122,14 @@ public class ControladorChat {
                     if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
                         lines.add("[" + ts + "] " + prefix + ": " + (t.getContenido() != null ? t.getContenido() : ""));
                     } else if (m instanceof com.arquitectura.entidades.AudioMensajeLocal a) {
-                        lines.add("[" + ts + "] " + prefix + ": [Audio] " + (a.getRutaArchivo() != null ? a.getRutaArchivo() : ""));
+                        StringBuilder sb = new StringBuilder("[" + ts + "] " + prefix + ": [Audio]");
+                        if (a.getRutaArchivo() != null && !a.getRutaArchivo().isBlank()) {
+                            sb.append(' ').append(a.getRutaArchivo());
+                        }
+                        if (a.getTranscripcion() != null && !a.getTranscripcion().isBlank()) {
+                            sb.append(" — \"").append(a.getTranscripcion()).append("\"");
+                        }
+                        lines.add(sb.toString());
                     } else {
                         lines.add("[" + ts + "] " + prefix + ": (" + (m.getTipo() != null ? m.getTipo() : "MSG") + ")");
                     }

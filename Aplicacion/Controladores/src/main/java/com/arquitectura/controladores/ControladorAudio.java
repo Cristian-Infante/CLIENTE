@@ -1,143 +1,144 @@
 package com.arquitectura.controladores;
 
 import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.repositorios.RepositorioMensajes;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ServicioMensajes;
-import com.arquitectura.repositorios.RepositorioMensajes;
 
-import javax.sound.sampled.*;
-import java.io.ByteArrayOutputStream;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
+import java.util.Base64;
 
 public class ControladorAudio {
+    private static final String MIME_WAV = "audio/wav";
+
     private final ClienteLocal clienteActual;
     private final ServicioConexionChat conexion;
-    private TargetDataLine lineaEntrada;
-    private Thread hiloGrabacion;
-    private volatile boolean grabando;
-    private ByteArrayOutputStream bufferAudio;
-    private AudioFormat formato;
+    private final ServicioMensajes servicioMensajes;
 
     public ControladorAudio(ClienteLocal clienteActual, ServicioConexionChat conexion) {
         this.clienteActual = clienteActual;
         this.conexion = conexion;
+        this.servicioMensajes = new ServicioMensajes(new RepositorioMensajes(), conexion);
     }
 
-    public boolean iniciarGrabacion() {
-        if (grabando) return false;
+    public ResultadoEnvioAudio enviarAudioAPrivado(Long usuarioId, String usuarioNombre, File archivoWav, byte[] datosWav) {
+        return procesarEnvio(archivoWav, datosWav, (ruta, duracionSeg) ->
+                servicioMensajes.enviarAudioArchivoAPrivado(
+                        clienteActual.getId(),
+                        clienteActual.getNombreDeUsuario(),
+                        usuarioId,
+                        usuarioNombre,
+                        ruta,
+                        MIME_WAV,
+                        duracionSeg
+                ));
+    }
+
+    public ResultadoEnvioAudio enviarAudioACanal(Long canalId, String canalNombre, File archivoWav, byte[] datosWav) {
+        return procesarEnvio(archivoWav, datosWav, (ruta, duracionSeg) ->
+                servicioMensajes.enviarAudioArchivoACanal(
+                        clienteActual.getId(),
+                        clienteActual.getNombreDeUsuario(),
+                        canalId,
+                        ruta,
+                        MIME_WAV,
+                        duracionSeg
+                ));
+    }
+
+    private ResultadoEnvioAudio procesarEnvio(File archivoWav, byte[] datosWav, RegistroLocal registroLocal) {
+        if (datosWav == null || datosWav.length == 0) {
+            return ResultadoEnvioAudio.fallo("No se recibió audio para enviar");
+        }
         try {
-            formato = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, 44100f, 16, 1, 2, 44100f, false);
-            DataLine.Info info = new DataLine.Info(TargetDataLine.class, formato);
-            if (!AudioSystem.isLineSupported(info)) return false;
-            lineaEntrada = (TargetDataLine) AudioSystem.getLine(info);
-            lineaEntrada.open(formato);
-            lineaEntrada.start();
-            bufferAudio = new ByteArrayOutputStream();
-            grabando = true;
-            hiloGrabacion = new Thread(() -> {
-                byte[] buf = new byte[4096];
-                while (grabando) {
-                    int leidos = lineaEntrada.read(buf, 0, buf.length);
-                    if (leidos > 0) bufferAudio.write(buf, 0, leidos);
-                }
-            }, "ctrl-audio-grab");
-            hiloGrabacion.setDaemon(true);
-            hiloGrabacion.start();
-            return true;
-        } catch (LineUnavailableException e) {
-            return false;
+            AnalisisWav analisis = analizarWav(datosWav);
+            if (analisis == null) {
+                return ResultadoEnvioAudio.fallo("Formato de audio no soportado");
+            }
+
+            com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(conexion);
+            String base64 = Base64.getEncoder().encodeToString(datosWav);
+            String nombreArchivo = archivoWav != null ? archivoWav.getName() : null;
+            var respuesta = comandos.subirAudio(base64, MIME_WAV, analisis.duracionSegundos, nombreArchivo, 10000);
+            if (respuesta == null || !respuesta.exito || respuesta.rutaArchivo == null || respuesta.rutaArchivo.isBlank()) {
+                String mensaje = respuesta != null && respuesta.mensaje != null ? respuesta.mensaje : "Error subiendo el audio";
+                return ResultadoEnvioAudio.fallo(mensaje);
+            }
+
+            try {
+                registroLocal.registrar(respuesta.rutaArchivo, analisis.duracionSegundos);
+            } catch (IOException e) {
+                return ResultadoEnvioAudio.fallo("Error enviando audio al servidor: " + e.getMessage());
+            } catch (java.sql.SQLException e) {
+                // Persistencia local falló pero el audio fue subido correctamente.
+                return ResultadoEnvioAudio.exito(respuesta.rutaArchivo, analisis.duracionSegundos,
+                        respuesta.mensaje != null ? respuesta.mensaje : "Audio enviado (sin registrar localmente)"
+                );
+            }
+
+            return ResultadoEnvioAudio.exito(respuesta.rutaArchivo, analisis.duracionSegundos, respuesta.mensaje);
+        } catch (UnsupportedAudioFileException e) {
+            return ResultadoEnvioAudio.fallo("Audio WAV inválido: " + e.getMessage());
+        } catch (IOException e) {
+            return ResultadoEnvioAudio.fallo("Error de E/S al procesar el audio: " + e.getMessage());
         }
     }
 
-    public boolean estaGrabando() { return grabando; }
-
-    public byte[] detenerGrabacion() {
-        if (!grabando) return null;
-        grabando = false;
-        try { if (hiloGrabacion != null) hiloGrabacion.join(200); } catch (InterruptedException ignored) {}
-        if (lineaEntrada != null) { try { lineaEntrada.stop(); } catch (Exception ignored) {} try { lineaEntrada.close(); } catch (Exception ignored) {} }
-        return bufferAudio != null ? bufferAudio.toByteArray() : null;
-    }
-
-    public boolean enviarAudioUsuario(Long usuarioId, byte[] audioPcm, String etiqueta) {
-        try {
-            if (audioPcm == null || audioPcm.length == 0) return false;
-            GuardadoAudio g = guardarComoWav(audioPcm, false, usuarioId);
-            ServicioMensajes sm = new ServicioMensajes(new RepositorioMensajes(), conexion);
-            sm.enviarAudioArchivoAPrivado(
-                    clienteActual.getId(),
-                    clienteActual.getNombreDeUsuario(),
-                    usuarioId,
-                    null,
-                    g.ruta,
-                    "audio/wav",
-                    g.duracionSeg
-            );
-            return true;
-        } catch (Exception e) {
-            return false;
+    private AnalisisWav analizarWav(byte[] datosWav) throws IOException, UnsupportedAudioFileException {
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(datosWav);
+             AudioInputStream ais = AudioSystem.getAudioInputStream(bais)) {
+            AudioFormat formato = ais.getFormat();
+            if (formato == null) return null;
+            if (formato.getChannels() != 1 || formato.getSampleSizeInBits() != 16) return null;
+            float sampleRate = formato.getSampleRate();
+            if (sampleRate <= 0) return null;
+            if (Math.abs(sampleRate - 16000f) > 1f) return null;
+            long frames = ais.getFrameLength();
+            if (frames <= 0) {
+                frames = datosWav.length / Math.max(1, formato.getFrameSize());
+            }
+            double segundos = frames / sampleRate;
+            int duracion = (int) Math.max(1, Math.ceil(segundos));
+            AnalisisWav analisis = new AnalisisWav();
+            analisis.duracionSegundos = duracion;
+            return analisis;
         }
     }
 
-    public boolean enviarAudioCanal(Long canalId, String nombreCanal, byte[] audioPcm, String etiqueta) {
-        try {
-            if (audioPcm == null || audioPcm.length == 0) return false;
-            GuardadoAudio g = guardarComoWav(audioPcm, true, canalId);
-            ServicioMensajes sm = new ServicioMensajes(new RepositorioMensajes(), conexion);
-            sm.enviarAudioArchivoACanal(
-                    clienteActual.getId(),
-                    clienteActual.getNombreDeUsuario(),
-                    canalId,
-                    g.ruta,
-                    "audio/wav",
-                    g.duracionSeg
-            );
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+    @FunctionalInterface
+    private interface RegistroLocal {
+        void registrar(String rutaArchivo, int duracionSeg) throws IOException, java.sql.SQLException;
     }
 
-    private static class GuardadoAudio { String ruta; int duracionSeg; }
-
-    private GuardadoAudio guardarComoWav(byte[] pcm, boolean esCanal, Long destinoId) throws IOException {
-        int sampleRate = 44100; int channels = 1; int bitsPerSample = 16; int byteRate = sampleRate * channels * (bitsPerSample/8);
-        int blockAlign = channels * (bitsPerSample/8);
-        int dataLen = pcm.length;
-        int riffLen = 36 + dataLen;
-
-        java.nio.file.Path base = java.nio.file.Paths.get("media","audio", esCanal ? "canales" : "usuarios", String.valueOf(destinoId != null ? destinoId : 0));
-        java.nio.file.Files.createDirectories(base);
-        String nombre = "rec_" + System.currentTimeMillis() + ".wav";
-        java.nio.file.Path path = base.resolve(nombre);
-
-        try (java.io.OutputStream os = java.nio.file.Files.newOutputStream(path)) {
-            // RIFF header
-            escribir(os, "RIFF");
-            escribirIntLE(os, riffLen);
-            escribir(os, "WAVE");
-            // fmt chunk
-            escribir(os, "fmt ");
-            escribirIntLE(os, 16); // Subchunk1Size for PCM
-            escribirShortLE(os, (short)1); // PCM
-            escribirShortLE(os, (short)channels);
-            escribirIntLE(os, sampleRate);
-            escribirIntLE(os, byteRate);
-            escribirShortLE(os, (short)blockAlign);
-            escribirShortLE(os, (short)bitsPerSample);
-            // data chunk
-            escribir(os, "data");
-            escribirIntLE(os, dataLen);
-            os.write(pcm);
-        }
-
-        GuardadoAudio g = new GuardadoAudio();
-        g.ruta = path.toString();
-        g.duracionSeg = (int)Math.ceil((double)dataLen / (double)byteRate);
-        return g;
+    private static class AnalisisWav {
+        int duracionSegundos;
     }
 
-    private void escribir(java.io.OutputStream os, String s) throws IOException { os.write(s.getBytes(java.nio.charset.StandardCharsets.US_ASCII)); }
-    private void escribirIntLE(java.io.OutputStream os, int v) throws IOException { os.write(new byte[]{ (byte)(v), (byte)(v>>8), (byte)(v>>16), (byte)(v>>24) }); }
-    private void escribirShortLE(java.io.OutputStream os, short v) throws IOException { os.write(new byte[]{ (byte)(v), (byte)(v>>8) }); }
+    public static class ResultadoEnvioAudio {
+        public final boolean exito;
+        public final String mensaje;
+        public final String rutaArchivo;
+        public final int duracionSegundos;
+
+        private ResultadoEnvioAudio(boolean exito, String mensaje, String rutaArchivo, int duracionSegundos) {
+            this.exito = exito;
+            this.mensaje = mensaje;
+            this.rutaArchivo = rutaArchivo;
+            this.duracionSegundos = duracionSegundos;
+        }
+
+        public static ResultadoEnvioAudio exito(String rutaArchivo, int duracionSegundos, String mensaje) {
+            return new ResultadoEnvioAudio(true, mensaje, rutaArchivo, duracionSegundos);
+        }
+
+        public static ResultadoEnvioAudio fallo(String mensaje) {
+            return new ResultadoEnvioAudio(false, mensaje, null, 0);
+        }
+    }
 }

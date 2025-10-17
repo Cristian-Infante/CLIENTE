@@ -53,7 +53,6 @@ public class VistaChatPrincipal extends JFrame {
     private JTextArea areaMensajes;
     private JTextField txtMensaje;
     private JButton btnEnviar;
-    private JButton btnAudio;
     private JButton btnGrabador;
     private JLabel lblDestinatario;
 
@@ -279,27 +278,14 @@ public class VistaChatPrincipal extends JFrame {
         txtMensaje.addActionListener(e -> enviarMensaje());
 
         JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
-        btnAudio = new JButton("Audio");
-        btnAudio.setToolTipText("Enviar audio");
-        btnAudio.addActionListener(e -> toggleGrabacionAudio());
 
-        btnGrabador = new JButton("Grabar audio...");
-        btnGrabador.setToolTipText("Abrir grabador de audio");
-        btnGrabador.addActionListener(e -> {
-            DialogoGrabacionAudio dlg = new DialogoGrabacionAudio(SwingUtilities.getWindowAncestor(this));
-            dlg.setOyenteEnvio((archivoWav, datosWav) -> JOptionPane.showMessageDialog(
-                    this,
-                    "Audio listo para enviar (" + datosWav.length + " bytes)\n" + archivoWav.getAbsolutePath(),
-                    "Grabación",
-                    JOptionPane.INFORMATION_MESSAGE
-            ));
-            dlg.setVisible(true);
-        });
+        btnGrabador = new JButton("Grabar audio");
+        btnGrabador.setToolTipText("Grabar y enviar audio");
+        btnGrabador.addActionListener(e -> abrirGrabadorAudio());
 
         btnEnviar = new JButton("Enviar");
         btnEnviar.addActionListener(e -> enviarMensaje());
 
-        panelBotones.add(btnAudio);
         panelBotones.add(btnGrabador);
         panelBotones.add(btnEnviar);
         panelEntrada.add(txtMensaje, BorderLayout.CENTER);
@@ -428,28 +414,54 @@ public class VistaChatPrincipal extends JFrame {
         }
     }
 
-    private void toggleGrabacionAudio() {
-        if (audioController.estaGrabando()) {
-            byte[] audioData = audioController.detenerGrabacion();
-            btnAudio.setText("Audio");
-            btnAudio.setBackground(null);
-            if (audioData != null) {
-                int opcion = JOptionPane.showConfirmDialog(this, "¿Enviar mensaje de audio?", "Audio grabado", JOptionPane.YES_NO_OPTION);
-                if (opcion == JOptionPane.YES_OPTION) {
-                    if (usuarioSeleccionado != null) {
-                        audioController.enviarAudioUsuario(usuarioSeleccionado.getId(), audioData, "[Audio]");
-                    } else if (canalSeleccionado != null) {
-                        audioController.enviarAudioCanal(canalSeleccionado.getId(), canalSeleccionado.getNombre(), audioData, "[Audio]");
-                    }
-                }
-            }
-        } else {
-            if (audioController.iniciarGrabacion()) {
-                btnAudio.setText("Grabando...");
-                btnAudio.setBackground(Color.RED);
-                JOptionPane.showMessageDialog(this, "Grabando audio...\nClick nuevamente para detener");
-            }
+    private void abrirGrabadorAudio() {
+        if (usuarioSeleccionado == null && canalSeleccionado == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un chat o canal antes de grabar audio", "Sin destino", JOptionPane.WARNING_MESSAGE);
+            return;
         }
+        DialogoGrabacionAudio dlg = new DialogoGrabacionAudio(SwingUtilities.getWindowAncestor(this));
+        dlg.setOyenteEnvio((archivoWav, datosWav) -> {
+            dlg.dispose();
+            enviarAudioGrabado(archivoWav, datosWav);
+        });
+        dlg.setVisible(true);
+    }
+
+    private void enviarAudioGrabado(java.io.File archivoWav, byte[] datosWav) {
+        if (datosWav == null || datosWav.length == 0) {
+            JOptionPane.showMessageDialog(this, "No se capturó audio para enviar", "Audio vacío", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        final ClienteLocal usuarioDestino = usuarioSeleccionado;
+        final CanalLocal canalDestino = canalSeleccionado;
+        if (usuarioDestino == null && canalDestino == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un chat o canal antes de enviar audio", "Sin destino", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Thread envio = new Thread(() -> {
+            ControladorAudio.ResultadoEnvioAudio resultado;
+            if (usuarioDestino != null) {
+                resultado = audioController.enviarAudioAPrivado(usuarioDestino.getId(), usuarioDestino.getNombreDeUsuario(), archivoWav, datosWav);
+            } else {
+                resultado = audioController.enviarAudioACanal(canalDestino.getId(), canalDestino.getNombre(), archivoWav, datosWav);
+            }
+            final ControladorAudio.ResultadoEnvioAudio resFinal = resultado;
+            SwingUtilities.invokeLater(() -> {
+                if (resFinal != null && resFinal.exito) {
+                    String ruta = resFinal.rutaArchivo != null ? resFinal.rutaArchivo : "";
+                    mostrarMensajeEnChat("Yo: [Audio] " + ruta);
+                    if (resFinal.mensaje != null && !resFinal.mensaje.isBlank()) {
+                        JOptionPane.showMessageDialog(this, resFinal.mensaje, "Audio enviado", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } else {
+                    String msg = (resFinal != null && resFinal.mensaje != null && !resFinal.mensaje.isBlank()) ? resFinal.mensaje : "No se pudo enviar el audio";
+                    JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+        }, "envio-audio");
+        envio.setDaemon(true);
+        envio.start();
     }
 
     private void mostrarInfoUsuario() {

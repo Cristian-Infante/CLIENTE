@@ -4,6 +4,7 @@ public class AudioMensajeLocal extends MensajeLocal {
     private String rutaArchivo;
     private String mime;
     private int duracionSeg;
+    private String transcripcion;
 
     public AudioMensajeLocal() {
     }
@@ -36,6 +37,14 @@ public class AudioMensajeLocal extends MensajeLocal {
 
     public void setDuracionSeg(int duracionSeg) {
         this.duracionSeg = duracionSeg;
+    }
+
+    public String getTranscripcion() {
+        return transcripcion;
+    }
+
+    public void setTranscripcion(String transcripcion) {
+        this.transcripcion = transcripcion;
     }
 }
 
