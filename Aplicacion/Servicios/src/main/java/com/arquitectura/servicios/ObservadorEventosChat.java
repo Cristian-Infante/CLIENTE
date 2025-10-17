@@ -279,14 +279,80 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
     private static boolean contieneEventoCanal(String compact) {
         if (compact == null) return false;
-        return compact.contains("\"command\":\"NEW_CHANNEL_MESSAGE\"") ||
-                (compact.contains("\"command\":\"EVENT\"") && compact.contains("\"tipo\":\"NEW_CHANNEL_MESSAGE\""));
+        if (compact.contains("\"command\":\"NEW_CHANNEL_MESSAGE\"")) return true;
+        if (!compact.contains("\"command\":\"EVENT\"")) return false;
+        if (compact.contains("\"tipo\":\"NEW_CHANNEL_MESSAGE\"")) return true;
+        int idx = compact.indexOf("\"canalId\":");
+        if (idx >= 0) {
+            idx += "\"canalId\":".length();
+            if (idx < compact.length()) {
+                char c = compact.charAt(idx);
+                if (Character.isDigit(c) || c == '-' || c == '+') return true;
+                if (c == '\"') {
+                    int next = idx + 1;
+                    if (next < compact.length()) {
+                        char d = compact.charAt(next);
+                        if (Character.isDigit(d)) return true;
+                    }
+                }
+            }
+        }
+        int objIdx = compact.indexOf("\"canal\":{");
+        if (objIdx >= 0) {
+            int idIdx = compact.indexOf("\"id\":", objIdx);
+            if (idIdx > objIdx) {
+                idIdx += "\"id\":".length();
+                if (idIdx < compact.length()) {
+                    char c = compact.charAt(idIdx);
+                    if (Character.isDigit(c) || c == '-' || c == '+') return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean contieneEventoPrivado(String compact) {
         if (compact == null) return false;
-        return compact.contains("\"command\":\"NEW_MESSAGE\"") ||
-                (compact.contains("\"command\":\"EVENT\"") && compact.contains("\"tipo\":\"NEW_MESSAGE\""));
+        if (compact.contains("\"command\":\"NEW_MESSAGE\"")) return true;
+        if (!compact.contains("\"command\":\"EVENT\"")) return false;
+        if (compact.contains("\"tipo\":\"NEW_MESSAGE\"")) return true;
+        int idxCanal = compact.indexOf("\"canalId\":");
+        if (idxCanal >= 0) {
+            idxCanal += "\"canalId\":".length();
+            if (idxCanal < compact.length()) {
+                char c = compact.charAt(idxCanal);
+                if (Character.isDigit(c) || c == '-' || c == '+') return false;
+                if (c == '\"') {
+                    int next = idxCanal + 1;
+                    if (next < compact.length() && Character.isDigit(compact.charAt(next))) return false;
+                }
+            }
+        }
+        int idx = compact.indexOf("\"receptorId\":");
+        if (idx >= 0) {
+            idx += "\"receptorId\":".length();
+            if (idx < compact.length()) {
+                char c = compact.charAt(idx);
+                if (Character.isDigit(c) || c == '-' || c == '+') return true;
+                if (c == '\"') {
+                    int next = idx + 1;
+                    if (next < compact.length() && Character.isDigit(compact.charAt(next))) return true;
+                }
+            }
+        }
+        idx = compact.indexOf("\"receptor\":");
+        if (idx >= 0) {
+            idx += "\"receptor\":".length();
+            if (idx < compact.length()) {
+                char c = compact.charAt(idx);
+                if (Character.isDigit(c) || c == '-' || c == '+') return true;
+                if (c == '\"') {
+                    int next = idx + 1;
+                    if (next < compact.length() && Character.isDigit(compact.charAt(next))) return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static String extraerPayloadMensaje(String compact, String payload) {
