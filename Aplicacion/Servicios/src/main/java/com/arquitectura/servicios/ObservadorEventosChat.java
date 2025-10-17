@@ -162,12 +162,21 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 String contenidoPlano = obtenerCampoTextoPermitirNulo(obj, "contenido", "texto");
                 String ruta = obtenerCampoTexto(obj, "rutaArchivo");
                 String transcripcion = obtenerCampoTextoPermitirNulo(obj, "transcripcion");
+                String audioBase64 = obtenerCampoTextoPermitirNulo(obj, "audioBase64");
+                String audioMime = obtenerCampoTextoPermitirNulo(obj, "mime");
+                Integer duracionSeg = obtenerCampoEntero(obj, "duracionSeg");
                 if (contenidoObjeto != null) {
                     if (esAudio) {
                         String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
                         if (rutaInterna != null) ruta = rutaInterna;
                         String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion");
                         if (transcripcionInterna != null || contieneCampo(contenidoObjeto, "transcripcion")) transcripcion = transcripcionInterna;
+                        String base64Interno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "audioBase64");
+                        if (base64Interno != null || contieneCampo(contenidoObjeto, "audioBase64")) audioBase64 = base64Interno;
+                        String mimeInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "mime");
+                        if (mimeInterno != null || contieneCampo(contenidoObjeto, "mime")) audioMime = mimeInterno;
+                        Integer duracionInterna = obtenerCampoEntero(contenidoObjeto, "duracionSeg");
+                        if (duracionInterna != null || contieneCampo(contenidoObjeto, "duracionSeg")) duracionSeg = duracionInterna;
                     } else {
                         String contenidoInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "contenido", "texto");
                         if (contenidoInterno != null || contieneCampo(contenidoObjeto, "contenido") || contieneCampo(contenidoObjeto, "texto")) contenidoPlano = contenidoInterno;
@@ -176,11 +185,11 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
                 if (esAudio) {
                     if (esCanal) {
-                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
+                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                         if (idIns > 0) insertados++;
                         if (canalId != null) canalesNotificar.add(canalId);
                     } else {
-                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
+                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                         if (idIns > 0) insertados++;
                         if (emisor != null) privadosNotificar.add(emisor);
                         if (receptor != null) privadosNotificar.add(receptor);
@@ -235,12 +244,21 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             String contenidoPlano = obtenerCampoTextoPermitirNulo(payloadMensaje, "contenido", "texto");
             String ruta = obtenerCampoTexto(payloadMensaje, "rutaArchivo");
             String transcripcion = obtenerCampoTextoPermitirNulo(payloadMensaje, "transcripcion");
+            String audioBase64 = obtenerCampoTextoPermitirNulo(payloadMensaje, "audioBase64");
+            String audioMime = obtenerCampoTextoPermitirNulo(payloadMensaje, "mime");
+            Integer duracionSeg = obtenerCampoEntero(payloadMensaje, "duracionSeg");
             if (contenidoObjeto != null) {
                 if (esAudio) {
                     String rutaInterna = obtenerCampoTexto(contenidoObjeto, "rutaArchivo");
                     if (rutaInterna != null) ruta = rutaInterna;
                     String transcripcionInterna = obtenerCampoTextoPermitirNulo(contenidoObjeto, "transcripcion");
                     if (transcripcionInterna != null || contieneCampo(contenidoObjeto, "transcripcion")) transcripcion = transcripcionInterna;
+                    String base64Interno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "audioBase64");
+                    if (base64Interno != null || contieneCampo(contenidoObjeto, "audioBase64")) audioBase64 = base64Interno;
+                    String mimeInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "mime");
+                    if (mimeInterno != null || contieneCampo(contenidoObjeto, "mime")) audioMime = mimeInterno;
+                    Integer duracionInterna = obtenerCampoEntero(contenidoObjeto, "duracionSeg");
+                    if (duracionInterna != null || contieneCampo(contenidoObjeto, "duracionSeg")) duracionSeg = duracionInterna;
                 } else {
                     String contenidoInterno = obtenerCampoTextoPermitirNulo(contenidoObjeto, "contenido", "texto");
                     if (contenidoInterno != null || contieneCampo(contenidoObjeto, "contenido") || contieneCampo(contenidoObjeto, "texto")) contenidoPlano = contenidoInterno;
@@ -249,11 +267,11 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
             if (esAudio) {
                 if (esCanal) {
-                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
+                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                     System.out.println("[ObservadorEventosChat] Audio canal insertado id=" + id + " canal=" + canalId);
                     if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
                 } else {
-                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta);
+                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                     System.out.println("[ObservadorEventosChat] Audio privado insertado id=" + id + " receptor=" + receptor);
                     if (emisor != null) ServicioEventosMensajes.instancia().notificarPrivado(emisor);
                     if (receptor != null && !receptor.equals(emisor)) ServicioEventosMensajes.instancia().notificarPrivado(receptor);
@@ -387,6 +405,16 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         return null;
     }
 
+    private static Integer obtenerCampoEntero(String json, String... nombres) {
+        if (nombres == null) return null;
+        for (String nombre : nombres) {
+            if (nombre == null) continue;
+            Integer v = extraerEntero(json, nombre);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
     private static Long obtenerCampoLong(String json, String... nombres) {
         if (nombres == null) return null;
         for (String nombre : nombres) {
@@ -423,6 +451,15 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(-?\\d+)");
             Matcher m = p.matcher(json);
             if (m.find()) return Long.parseLong(m.group(1));
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private static Integer extraerEntero(String json, String campo) {
+        try {
+            Pattern p = Pattern.compile("\\\"" + Pattern.quote(campo) + "\\\"\\s*:\\s*(-?\\d+)");
+            Matcher m = p.matcher(json);
+            if (m.find()) return Integer.parseInt(m.group(1));
         } catch (Exception ignored) {}
         return null;
     }

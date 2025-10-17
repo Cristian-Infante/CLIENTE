@@ -28,27 +28,29 @@ public class ControladorAudio {
     }
 
     public ResultadoEnvioAudio enviarAudioAPrivado(Long usuarioId, String usuarioNombre, File archivoWav, byte[] datosWav) {
-        return procesarEnvio(archivoWav, datosWav, (ruta, duracionSeg) ->
+        return procesarEnvio(archivoWav, datosWav, (ruta, duracionSeg, audioBase64, mime) ->
                 servicioMensajes.enviarAudioArchivoAPrivado(
                         clienteActual.getId(),
                         clienteActual.getNombreDeUsuario(),
                         usuarioId,
                         usuarioNombre,
                         ruta,
-                        MIME_WAV,
-                        duracionSeg
+                        mime,
+                        duracionSeg,
+                        audioBase64
                 ));
     }
 
     public ResultadoEnvioAudio enviarAudioACanal(Long canalId, String canalNombre, File archivoWav, byte[] datosWav) {
-        return procesarEnvio(archivoWav, datosWav, (ruta, duracionSeg) ->
+        return procesarEnvio(archivoWav, datosWav, (ruta, duracionSeg, audioBase64, mime) ->
                 servicioMensajes.enviarAudioArchivoACanal(
                         clienteActual.getId(),
                         clienteActual.getNombreDeUsuario(),
                         canalId,
                         ruta,
-                        MIME_WAV,
-                        duracionSeg
+                        mime,
+                        duracionSeg,
+                        audioBase64
                 ));
     }
 
@@ -72,7 +74,7 @@ public class ControladorAudio {
             }
 
             try {
-                registroLocal.registrar(respuesta.rutaArchivo, analisis.duracionSegundos);
+                registroLocal.registrar(respuesta.rutaArchivo, analisis.duracionSegundos, base64, MIME_WAV);
             } catch (IOException e) {
                 return ResultadoEnvioAudio.fallo("Error enviando audio al servidor: " + e.getMessage());
             } catch (java.sql.SQLException e) {
@@ -113,7 +115,7 @@ public class ControladorAudio {
 
     @FunctionalInterface
     private interface RegistroLocal {
-        void registrar(String rutaArchivo, int duracionSeg) throws IOException, java.sql.SQLException;
+        void registrar(String rutaArchivo, int duracionSeg, String audioBase64, String mime) throws IOException, java.sql.SQLException;
     }
 
     private static class AnalisisWav {
