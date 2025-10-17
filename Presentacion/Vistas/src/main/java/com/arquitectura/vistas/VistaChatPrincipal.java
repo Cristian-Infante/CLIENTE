@@ -27,7 +27,6 @@ import java.awt.*;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.Base64;
 
 public class VistaChatPrincipal extends JFrame {
@@ -90,6 +89,7 @@ public class VistaChatPrincipal extends JFrame {
         inicializarComponentes();
         configurarVentana();
         registrarOyenteEventos();
+        SwingUtilities.invokeLater(this::refrescarSegunTabSeleccionada);
     }
 
     private void registrarOyenteEventos() {
@@ -265,24 +265,35 @@ public class VistaChatPrincipal extends JFrame {
     private void refrescarSegunTabSeleccionada() {
         int idx = tabsConversaciones.getSelectedIndex();
         if (idx == 0) {
-            cargarUsuariosConectados();
+            cargarUsuariosDisponibles();
         } else if (idx == 1) {
             cargarListaMisCanales();
         }
     }
 
-    private void cargarUsuariosConectados() {
+    private void cargarUsuariosDisponibles() {
         try {
             if (!clienteTCP.estaConectado()) clienteTCP.conectar();
             com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(clienteTCP);
-            java.util.List<ClienteLocal> conectados = comandos.listarConectadosYEsperar(6000);
+            java.util.List<ClienteLocal> usuarios = comandos.listarUsuariosYEsperar(6000);
             modeloUsuarios.clear();
-            if (conectados != null) {
+            if (usuarios != null) {
+                usuarios = new java.util.ArrayList<>(usuarios);
+                usuarios.sort((a, b) -> {
+                    boolean aCon = Boolean.TRUE.equals(a.getEstado());
+                    boolean bCon = Boolean.TRUE.equals(b.getEstado());
+                    if (aCon == bCon) {
+                        String na = a.getNombreDeUsuario() != null ? a.getNombreDeUsuario() : "";
+                        String nb = b.getNombreDeUsuario() != null ? b.getNombreDeUsuario() : "";
+                        return na.compareToIgnoreCase(nb);
+                    }
+                    return aCon ? -1 : 1;
+                });
                 // Excluir al usuario actual
                 Long miId = usuarioActual != null ? usuarioActual.getId() : null;
                 String miUser = usuarioActual != null ? usuarioActual.getNombreDeUsuario() : null;
                 String miNorm = miUser != null ? miUser.trim().toLowerCase() : null;
-                for (ClienteLocal u : conectados) {
+                for (ClienteLocal u : usuarios) {
                     if (u == null) continue;
                     if (miId != null && miId.equals(u.getId())) continue;
                     String uNorm = u.getNombreDeUsuario() != null ? u.getNombreDeUsuario().trim().toLowerCase() : null;
@@ -445,8 +456,8 @@ public class VistaChatPrincipal extends JFrame {
             enviado = chatController.enviarMensajeCanal(canalSeleccionado.getId(), canalSeleccionado.getNombre(), texto);
         }
         if (enviado) {
-            agregarMensajeTemporalTexto(texto);
             txtMensaje.setText("");
+            refrescarMensajesActuales();
         } else {
             JOptionPane.showMessageDialog(this, "Error al enviar", "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -746,18 +757,6 @@ public class VistaChatPrincipal extends JFrame {
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
         area.setFont(area.getFont().deriveFont(13f));
         return area;
-    }
-
-    private void agregarMensajeTemporalTexto(String texto) {
-        TextoMensajeLocal mensaje = new TextoMensajeLocal();
-        mensaje.setTimeStamp(LocalDateTime.now());
-        mensaje.setEmisor(usuarioActual.getId());
-        mensaje.setEmisorNombre(usuarioActual.getNombreDeUsuario());
-        mensaje.setContenido(texto);
-        agregarMensajeVisual(mensaje);
-        contenedorMensajes.revalidate();
-        contenedorMensajes.repaint();
-        desplazarAlFinal();
     }
 
     private void refrescarMensajesActuales() {
