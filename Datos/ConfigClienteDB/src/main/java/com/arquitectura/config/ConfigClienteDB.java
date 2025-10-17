@@ -70,13 +70,19 @@ public class ConfigClienteDB {
                 }
 
                 String relative = url.substring(pref.length()); // starts with ./
+                String extras = "";
+                int idxExtras = relative.indexOf(';');
+                if (idxExtras >= 0) {
+                    extras = relative.substring(idxExtras);
+                    relative = relative.substring(0, idxExtras);
+                }
                 while (relative.startsWith("./")) relative = relative.substring(2);
                 File dataPath = new File(projectRoot, relative).getAbsoluteFile();
                 // Ensure parent dir exists
                 File dir = dataPath.getParentFile();
                 if (dir != null && !dir.exists()) dir.mkdirs();
                 // Use forward slashes for H2 compatibility on Windows
-                return pref + dataPath.getPath().replace('\\', '/');
+                return pref + dataPath.getPath().replace('\\', '/') + extras;
             }
         } catch (URISyntaxException ignored) {
         }
