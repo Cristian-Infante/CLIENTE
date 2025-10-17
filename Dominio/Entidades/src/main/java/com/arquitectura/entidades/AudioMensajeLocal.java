@@ -5,6 +5,7 @@ public class AudioMensajeLocal extends MensajeLocal {
     private String mime;
     private int duracionSeg;
     private String transcripcion;
+    private String audioBase64;
 
     public AudioMensajeLocal() {
     }
@@ -45,6 +46,14 @@ public class AudioMensajeLocal extends MensajeLocal {
 
     public void setTranscripcion(String transcripcion) {
         this.transcripcion = transcripcion;
+    }
+
+    public String getAudioBase64() {
+        return audioBase64;
+    }
+
+    public void setAudioBase64(String audioBase64) {
+        this.audioBase64 = audioBase64;
     }
 }
 

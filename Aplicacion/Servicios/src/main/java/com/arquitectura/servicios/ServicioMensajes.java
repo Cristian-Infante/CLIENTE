@@ -78,7 +78,7 @@ public class ServicioMensajes {
     }
 
     // Envío de audio por archivo al canal
-    public long enviarAudioArchivoACanal(Long emisorId, String emisorNombre, Long canalId, String rutaArchivo, String mime, Integer duracionSeg) throws SQLException, IOException {
+    public long enviarAudioArchivoACanal(Long emisorId, String emisorNombre, Long canalId, String rutaArchivo, String mime, Integer duracionSeg, String audioBase64) throws SQLException, IOException {
         if (conexion != null) {
             try {
                 if (!conexion.estaConectado()) conexion.conectar();
@@ -86,14 +86,14 @@ public class ServicioMensajes {
                 comandos.enviarAudioACanal(canalId, rutaArchivo, mime, duracionSeg);
             } catch (Exception ignored) {}
         }
-        long id = repositorio.insertarMensajeAudioConRuta(emisorId, emisorNombre, null, null, canalId, null, "AUDIO", rutaArchivo);
+        long id = repositorio.insertarMensajeAudioConRuta(emisorId, emisorNombre, null, null, canalId, null, "AUDIO", rutaArchivo, audioBase64, mime, duracionSeg);
         System.out.println("[ServicioMensajes] AudioArchivo canal insertado id=" + id + " canal=" + canalId);
         try { com.arquitectura.servicios.ServicioEventosMensajes.instancia().notificarCanal(canalId); } catch (Exception ignored) {}
         return id;
     }
 
     // Envío de audio por archivo a usuario
-    public long enviarAudioArchivoAPrivado(Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, String rutaArchivo, String mime, Integer duracionSeg) throws SQLException, IOException {
+    public long enviarAudioArchivoAPrivado(Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, String rutaArchivo, String mime, Integer duracionSeg, String audioBase64) throws SQLException, IOException {
         if (conexion != null) {
             try {
                 if (!conexion.estaConectado()) conexion.conectar();
@@ -101,7 +101,7 @@ public class ServicioMensajes {
                 comandos.enviarAudioAUsuario(receptorId, rutaArchivo, mime, duracionSeg);
             } catch (Exception ignored) {}
         }
-        long id = repositorio.insertarMensajeAudioConRuta(emisorId, emisorNombre, receptorId, receptorNombre, null, null, "AUDIO", rutaArchivo);
+        long id = repositorio.insertarMensajeAudioConRuta(emisorId, emisorNombre, receptorId, receptorNombre, null, null, "AUDIO", rutaArchivo, audioBase64, mime, duracionSeg);
         System.out.println("[ServicioMensajes] AudioArchivo privado insertado id=" + id + " receptor=" + receptorId);
         try { com.arquitectura.servicios.ServicioEventosMensajes.instancia().notificarPrivado(receptorId); } catch (Exception ignored) {}
         return id;
