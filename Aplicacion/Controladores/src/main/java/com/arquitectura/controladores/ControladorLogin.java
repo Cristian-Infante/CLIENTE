@@ -4,6 +4,7 @@ import com.arquitectura.entidades.ClienteLocal;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ServicioComandosChat;
 import com.arquitectura.servicios.ObservadorEventosChat;
+import com.arquitectura.servicios.ServicioContextoDatos;
 
 import java.util.Base64;
 import java.net.Inet4Address;
@@ -58,6 +59,8 @@ public class ControladorLogin {
             }
             clienteSesion.setContrasenia(contrasenia);
             clienteSesion.setEstado(true);
+            configurarContextoLocal(clienteSesion);
+            intentarCargarFotoDesdeRespuesta(res.raw, clienteSesion);
             // Registrar observador singleton de eventos de mensajes
             try { ObservadorEventosChat.instancia().registrarEn(servicioConexion); } catch (Exception ignored4) {}
             // Completar datos faltantes consultando LIST_USERS si el servidor no devolvió id
@@ -76,6 +79,9 @@ public class ControladorLogin {
                                 clienteSesion.setId(u.getId());
                                 if (clienteSesion.getNombreDeUsuario() == null) clienteSesion.setNombreDeUsuario(u.getNombreDeUsuario());
                                 if (clienteSesion.getEmail() == null) clienteSesion.setEmail(u.getEmail());
+                                if (clienteSesion.getFoto() == null && u.getFoto() != null && u.getFoto().length > 0) {
+                                    clienteSesion.setFoto(u.getFoto());
+                                }
                                 break;
                             }
                         }
@@ -83,6 +89,7 @@ public class ControladorLogin {
                 }
                 if (clienteSesion.getId() == null) { clienteSesion.setId(0L); }
             } catch (Exception ignored3) { if (clienteSesion.getId() == null) clienteSesion.setId(0L); }
+            configurarContextoLocal(clienteSesion);
             return true;
         } catch (Exception ignored) {
             return false;
@@ -146,4 +153,23 @@ public class ControladorLogin {
     public ServicioConexionChat getServicioConexion() { return servicioConexion; }
 
     public String getUltimoMensajeServidor() { return ultimoMensajeServidor; }
+
+    private void configurarContextoLocal(ClienteLocal cliente) {
+        if (cliente == null) return;
+        ServicioContextoDatos.configurarUsuarioActual(cliente.getId(), cliente.getNombreDeUsuario());
+    }
+
+    private void intentarCargarFotoDesdeRespuesta(String raw, ClienteLocal cliente) {
+        if (raw == null || cliente == null) return;
+        try {
+            var pfoto = java.util.regex.Pattern.compile("\\\"foto(?:Base64)?\\\"\\s*:\\s*\\\"(.*?)\\\"", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.DOTALL);
+            var mfo = pfoto.matcher(raw);
+            if (mfo.find()) {
+                String base64 = mfo.group(1);
+                if (base64 != null && !base64.isBlank()) {
+                    try { cliente.setFoto(Base64.getDecoder().decode(base64)); } catch (IllegalArgumentException ignored) {}
+                }
+            }
+        } catch (Exception ignored) {}
+    }
 }

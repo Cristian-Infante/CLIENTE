@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class ProveedorConexionCliente {
     private final ConfigClienteDB configuracion;
     private final AtomicBoolean esquemaInicializado = new AtomicBoolean(false);
+    private volatile Long contextoUsuarioId;
+    private volatile String contextoUsuarioNombre;
 
     private ProveedorConexionCliente() {
         this.configuracion = ConfigClienteDB.cargarDesdeRecursos();
@@ -32,6 +34,19 @@ public final class ProveedorConexionCliente {
     }
 
     public String obtenerUrl() { return configuracion.obtenerUrl(); }
+
+    public void configurarContextoUsuario(Long usuarioId, String nombreUsuario) {
+        this.contextoUsuarioId = usuarioId;
+        this.contextoUsuarioNombre = nombreUsuario;
+    }
+
+    public Long obtenerContextoUsuarioId() {
+        return contextoUsuarioId;
+    }
+
+    public String obtenerContextoUsuarioNombre() {
+        return contextoUsuarioNombre;
+    }
 
     private void inicializarEsquemaSiHaceFalta() throws SQLException {
         if (esquemaInicializado.compareAndSet(false, true)) {
