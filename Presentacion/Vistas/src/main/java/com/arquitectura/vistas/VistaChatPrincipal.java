@@ -618,10 +618,22 @@ public class VistaChatPrincipal extends JFrame {
         int opcion = JOptionPane.showConfirmDialog(this, "¿Está seguro que desea salir?", "Cerrar Sesión", JOptionPane.YES_NO_OPTION);
         if (opcion == JOptionPane.YES_OPTION) {
             try {
-                if (!clienteTCP.estaConectado()) clienteTCP.conectar();
-                com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(clienteTCP);
-                // Enviar LOGOUT (sin cerrar el socket del cliente)
-                comandos.logout();
+                try {
+                    if (oyenteEventos != null) clienteTCP.removerOyente(oyenteEventos);
+                } catch (Exception ignored) {}
+                try {
+                    if (oyenteMensajes != null) ServicioEventosMensajes.instancia().remover(oyenteMensajes);
+                } catch (Exception ignored) {}
+                oyenteEventos = null;
+                oyenteMensajes = null;
+                if (!clienteTCP.estaConectado()) {
+                    try { clienteTCP.conectar(); } catch (Exception ignored) {}
+                }
+                if (clienteTCP.estaConectado()) {
+                    com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(clienteTCP);
+                    // Enviar LOGOUT pero mantener la conexión para evitar duplicados anónimos
+                    comandos.logout();
+                }
             } catch (Exception ignored) {}
             dispose();
             SwingUtilities.invokeLater(() -> new VistaLogin().setVisible(true));
