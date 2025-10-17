@@ -6,6 +6,7 @@ import com.arquitectura.infra.net.ProtocoloChat;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -61,10 +62,7 @@ public class ServicioComandosChat {
         if (!enviar("LOGIN", p)) return false;
         String linea = conexion.esperarRespuesta("LOGIN", timeoutMs);
         if (linea == null) return false;
-        // éxito si es ACK LOGIN con payload.success=true
-        if (linea.contains("\"command\":\"LOGIN\"") && linea.contains("\"success\": true")) return true;
-        // error si vino ERROR o success=false
-        return false;
+        return esRespuestaLoginExitosa(linea);
     }
 
     // Envío de mensajes
@@ -397,9 +395,7 @@ public class ServicioComandosChat {
         String linea = conexion.esperarRespuesta("LOGIN", timeoutMs);
         System.out.println("Respuesta LOGIN: " + linea);
         if (linea == null) return false;
-        String compact = linea.replaceAll("\\s+", "");
-        if (compact.contains("\"command\":\"LOGIN\"") && compact.contains("\"success\":true")) return true;
-        return false;
+        return esRespuestaLoginExitosa(linea);
     }
 
     public ResultadoLogin iniciarSesionYEsperarAckConMensaje(String email, String contrasenia, String ip, long timeoutMs) {
@@ -411,8 +407,7 @@ public class ServicioComandosChat {
         String linea = conexion.esperarRespuesta("LOGIN", timeoutMs);
         System.out.println("Respuesta LOGIN: " + linea);
         if (linea == null) return new ResultadoLogin(false, "Tiempo de espera agotado", null);
-        String compact = linea.replaceAll("\\s+", "");
-        boolean ok = compact.contains("\"command\":\"LOGIN\"") && compact.contains("\"success\":true");
+        boolean ok = esRespuestaLoginExitosa(linea);
         String msg = extraerMensajeDeLinea(linea);
         return new ResultadoLogin(ok, msg, linea);
     }
@@ -426,6 +421,30 @@ public class ServicioComandosChat {
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private boolean esRespuestaLoginExitosa(String jsonLinea) {
+        if (jsonLinea == null) return false;
+        try {
+            String compact = jsonLinea.replaceAll("\\s+", "");
+            if (!compact.contains("\"command\":\"LOGIN\"")) return false;
+
+            String mensaje = extraerCampoTexto(jsonLinea, "message");
+            if (mensaje != null) {
+                String normalizado = mensaje.trim();
+                if (normalizado.equalsIgnoreCase("Login exitoso") || normalizado.toLowerCase(Locale.ROOT).contains("login exitoso")) {
+                    return true;
+                }
+            }
+
+            java.util.regex.Pattern pat = java.util.regex.Pattern.compile("\\\"success\\\"\\s*:\\s*(true|false)", java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Matcher matcher = pat.matcher(jsonLinea);
+            if (matcher.find()) {
+                String valor = matcher.group(1);
+                if ("true".equalsIgnoreCase(valor)) return true;
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     public static class RespuestaUploadAudio {
