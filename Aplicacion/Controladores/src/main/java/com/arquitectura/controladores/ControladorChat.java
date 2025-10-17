@@ -2,21 +2,29 @@ package com.arquitectura.controladores;
 
 import com.arquitectura.entidades.ClienteLocal;
 import com.arquitectura.repositorios.RepositorioMensajes;
+import com.arquitectura.servicios.ServicioComandosChat;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ServicioMensajes;
 
 import java.io.IOException;
 import java.sql.SQLException;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class ControladorChat {
     private final ClienteLocal clienteActual;
     private final ServicioMensajes servicioMensajes;
+    private final ServicioConexionChat conexion;
+    private final Map<Long, String> cacheNombres;
 
     public ControladorChat(ClienteLocal clienteActual, ServicioConexionChat conexion) {
         this.clienteActual = clienteActual;
+        this.conexion = conexion;
         this.servicioMensajes = new ServicioMensajes(new RepositorioMensajes(), conexion);
+        this.cacheNombres = new java.util.concurrent.ConcurrentHashMap<>();
+        if (clienteActual != null && clienteActual.getId() != null && clienteActual.getNombreDeUsuario() != null) {
+            cacheNombres.put(clienteActual.getId(), clienteActual.getNombreDeUsuario());
+        }
     }
 
     public boolean enviarMensajeUsuario(Long receptorId, String receptorNombre, String texto) {
@@ -69,7 +77,7 @@ public class ControladorChat {
                     if (soyYo) {
                         prefix = "Yo";
                     } else {
-                        String nombre = m.getEmisorNombre();
+                        String nombre = normalizarNombreEmisor(m.getEmisor(), m.getEmisorNombre());
                         prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
                     }
                     if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
@@ -101,7 +109,7 @@ public class ControladorChat {
                     if (soyYo) {
                         prefix = "Yo";
                     } else {
-                        String nombre = m.getEmisorNombre();
+                        String nombre = normalizarNombreEmisor(m.getEmisor(), m.getEmisorNombre());
                         prefix = (nombre != null && !nombre.isBlank()) ? nombre : (m.getEmisor() != null ? ("#" + m.getEmisor()) : "?");
                     }
                     if (m instanceof com.arquitectura.entidades.TextoMensajeLocal t) {
@@ -117,5 +125,52 @@ public class ControladorChat {
         } catch (Exception e) {
             return java.util.List.of();
         }
+    }
+
+    private String normalizarNombreEmisor(Long emisorId, String nombreOriginal) {
+        if (nombreOriginal != null && !nombreOriginal.isBlank()) {
+            if (emisorId != null) {
+                cacheNombres.putIfAbsent(emisorId, nombreOriginal);
+            }
+            return nombreOriginal;
+        }
+        if (emisorId == null) return null;
+        String cached = cacheNombres.get(emisorId);
+        if (cached != null && !cached.isBlank()) {
+            return cached;
+        }
+        if (clienteActual != null && emisorId.equals(clienteActual.getId())) {
+            String propio = clienteActual.getNombreDeUsuario();
+            if (propio != null && !propio.isBlank()) {
+                cacheNombres.put(emisorId, propio);
+                return propio;
+            }
+        }
+        String obtenido = buscarNombreEnServidor(emisorId);
+        if (obtenido != null && !obtenido.isBlank()) {
+            cacheNombres.put(emisorId, obtenido);
+        }
+        return cacheNombres.get(emisorId);
+    }
+
+    private String buscarNombreEnServidor(Long emisorId) {
+        if (conexion == null || emisorId == null) return null;
+        try {
+            if (!conexion.estaConectado()) {
+                try { conexion.conectar(); } catch (Exception ignored) { return null; }
+            }
+            ServicioComandosChat comandos = new ServicioComandosChat(conexion);
+            java.util.List<ClienteLocal> todos = comandos.listarUsuariosYEsperar(4000);
+            if (todos != null) {
+                for (ClienteLocal u : todos) {
+                    if (u.getId() != null && u.getNombreDeUsuario() != null && !u.getNombreDeUsuario().isBlank()) {
+                        cacheNombres.put(u.getId(), u.getNombreDeUsuario());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return cacheNombres.get(emisorId);
     }
 }
