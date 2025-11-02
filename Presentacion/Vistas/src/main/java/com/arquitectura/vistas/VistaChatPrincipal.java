@@ -430,6 +430,8 @@ public class VistaChatPrincipal extends JFrame {
         }
         oyenteMensajes = new OyenteActualizacionMensajes() {
             @Override public void onPrivadoActualizado(Long id) {
+                // Debug log to trace private notification delivery
+                try { System.out.println("[VistaChatPrincipal] onPrivadoActualizado called id=" + id + " usuarioSeleccionado=" + (usuarioSeleccionado==null?"null":usuarioSeleccionado.getId())); } catch (Exception ignored) {}
                 if (id == null || usuarioSeleccionado == null) return;
                 if (!id.equals(usuarioSeleccionado.getId())) return;
                 java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(id);
@@ -439,6 +441,7 @@ public class VistaChatPrincipal extends JFrame {
                 });
             }
         };
+        // prefer the simple registrar; logging already done in ServicioEventosMensajes.notificar* calls
         ServicioEventosMensajes.instancia().registrar(oyenteMensajes);
     }
 

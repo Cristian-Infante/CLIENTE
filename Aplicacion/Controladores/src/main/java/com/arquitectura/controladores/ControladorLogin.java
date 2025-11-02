@@ -48,6 +48,20 @@ public class ControladorLogin {
 
             // Solo crear la sesión local cuando el servidor confirma LOGIN exitoso
             clienteSesion = new ClienteLocal();
+            // Si el servidor devuelve un sessionId, usarlo como token de sesion para la DB local
+            try {
+                String rawTok0 = res.raw;
+                if (rawTok0 != null) {
+                    var psid0 = java.util.regex.Pattern.compile("\\\"sessionId\\\"\\s*:\\s*\\\"(.*?)\\\"");
+                    var msid0 = psid0.matcher(rawTok0);
+                    if (msid0.find()) {
+                        String sid0 = msid0.group(1);
+                        if (sid0 != null && !sid0.isBlank()) {
+                            System.setProperty("arquitectura.config.client.db.sessionToken", sid0);
+                        }
+                    }
+                }
+            } catch (Exception ignored00) {}
             try {
                 String raw = res.raw;
                 if (raw != null) {

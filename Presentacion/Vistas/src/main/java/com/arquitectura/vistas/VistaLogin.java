@@ -68,17 +68,9 @@ public class VistaLogin extends JFrame {
     }
 
     private void inicializarBaseLocal() {
-        new Thread(() -> {
-            try {
-                ProveedorConexionCliente prov = ProveedorConexionCliente.instancia();
-                System.out.println("DB URL: " + prov.obtenerUrl());
-                try (java.sql.Connection c = prov.obtenerConexion()) {
-                    // No-op: la primera llamada inicializa el esquema si hace falta
-                }
-            } catch (Exception e) {
-                System.out.println("DB init error: " + e);
-            }
-        }, "init-db").start();
+        // Defer DB initialization until after login to avoid opening a shared file DB
+        // before the application has determined the user-specific DB file.
+        System.out.println("[VistaLogin] DB initialization deferred until user login.");
     }
 
     private JPanel crearPanelInicioSesion() {
