@@ -8,6 +8,7 @@ public class ClienteLocal {
     private byte[] foto;
     private String ip;
     private Boolean estado;
+    private Integer sesionesActivas;
 
     public ClienteLocal() {
     }
@@ -76,5 +77,13 @@ public class ClienteLocal {
 
     public void setEstado(Boolean estado) {
         this.estado = estado;
+    }
+
+    public Integer getSesionesActivas() {
+        return sesionesActivas;
+    }
+
+    public void setSesionesActivas(Integer sesionesActivas) {
+        this.sesionesActivas = sesionesActivas;
     }
 }
