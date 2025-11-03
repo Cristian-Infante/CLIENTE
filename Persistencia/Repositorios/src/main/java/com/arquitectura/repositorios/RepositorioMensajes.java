@@ -152,19 +152,29 @@ public class RepositorioMensajes {
     }
 
     public java.util.List<com.arquitectura.entidades.MensajeLocal> listarMensajesPrivados(Long miId, Long otroId, Integer limit) throws SQLException {
-        if (miId == null || otroId == null) return java.util.List.of();
+        if (otroId == null) return java.util.List.of();
+        boolean idPropioValido = miId != null && miId > 0;
         String sql = "SELECT id, fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg " +
-                     "FROM mensajes WHERE canal_id IS NULL AND contexto_usuario_id = ? AND ((emisor_id = ? AND receptor_id = ?) OR (emisor_id = ? AND receptor_id = ?)) " +
+                     "FROM mensajes WHERE canal_id IS NULL AND contexto_usuario_id = ? AND " +
+                     (idPropioValido
+                             ? "((emisor_id = ? AND receptor_id = ?) OR (emisor_id = ? AND receptor_id = ?)) "
+                             : "(emisor_id = ? OR receptor_id = ?) ") +
                      "ORDER BY fecha_envio ASC" + (limit != null ? " LIMIT ?" : "");
         java.util.List<com.arquitectura.entidades.MensajeLocal> res = new java.util.ArrayList<>();
         try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
              PreparedStatement ps = cn.prepareStatement(sql)) {
-            ps.setLong(1, contextoActual());
-            ps.setLong(2, miId);
-            ps.setLong(3, otroId);
-            ps.setLong(4, otroId);
-            ps.setLong(5, miId);
-            if (limit != null) ps.setInt(6, limit);
+            int idx = 1;
+            ps.setLong(idx++, contextoActual());
+            if (idPropioValido) {
+                ps.setLong(idx++, miId);
+                ps.setLong(idx++, otroId);
+                ps.setLong(idx++, otroId);
+                ps.setLong(idx++, miId);
+            } else {
+                ps.setLong(idx++, otroId);
+                ps.setLong(idx++, otroId);
+            }
+            if (limit != null) ps.setInt(idx, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     long id = rs.getLong(1);
