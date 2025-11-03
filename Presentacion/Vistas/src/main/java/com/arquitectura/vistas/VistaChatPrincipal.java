@@ -531,6 +531,44 @@ public class VistaChatPrincipal extends JFrame {
         info.append("INFORMACIÓN DEL CANAL\n\n");
         info.append("Nombre: ").append(canalSeleccionado.getNombre()).append("\n");
         info.append("Privado: ").append(Boolean.TRUE.equals(canalSeleccionado.getPrivado()) ? "Sí" : "No").append("\n");
+        java.util.List<com.arquitectura.entidades.ClienteLocal> miembros = canalSeleccionado.getMiembros();
+        if ((miembros == null || miembros.isEmpty()) && canalSeleccionado.getId() != null) {
+            try {
+                java.util.List<com.arquitectura.entidades.CanalLocal> actualizados = canalController.obtenerMisCanales();
+                if (actualizados != null) {
+                    for (com.arquitectura.entidades.CanalLocal canal : actualizados) {
+                        if (canal != null && canalSeleccionado.getId().equals(canal.getId())) {
+                            miembros = canal.getMiembros();
+                            canalSeleccionado.setMiembros(miembros);
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (miembros != null && !miembros.isEmpty()) {
+            info.append("Miembros (" + miembros.size() + "):\n");
+            for (com.arquitectura.entidades.ClienteLocal miembro : miembros) {
+                if (miembro == null) continue;
+                String nombre = miembro.getNombreDeUsuario();
+                if (nombre == null || nombre.isBlank()) {
+                    nombre = miembro.getEmail();
+                }
+                if (nombre == null || nombre.isBlank()) {
+                    nombre = miembro.getId() != null ? ("#" + miembro.getId()) : "Desconocido";
+                }
+                info.append(" - ").append(nombre);
+                if (miembro.getEmail() != null && (miembro.getNombreDeUsuario() == null || !miembro.getNombreDeUsuario().equalsIgnoreCase(miembro.getEmail()))) {
+                    info.append(" <").append(miembro.getEmail()).append('>');
+                }
+                if (miembro.getEstado() != null) {
+                    info.append(" - ").append(Boolean.TRUE.equals(miembro.getEstado()) ? "Conectado" : "Desconectado");
+                }
+                info.append('\n');
+            }
+        } else {
+            info.append("Miembros: No disponibles\n");
+        }
         areaInfo.setText(info.toString());
     }
 

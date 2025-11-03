@@ -1,7 +1,6 @@
 package com.arquitectura.controladores;
 
 import com.arquitectura.entidades.ClienteLocal;
-import com.arquitectura.repositorios.RepositorioMensajes;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ServicioMensajes;
 
@@ -24,7 +23,7 @@ public class ControladorAudio {
     public ControladorAudio(ClienteLocal clienteActual, ServicioConexionChat conexion) {
         this.clienteActual = clienteActual;
         this.conexion = conexion;
-        this.servicioMensajes = new ServicioMensajes(new RepositorioMensajes(), conexion);
+        this.servicioMensajes = new ServicioMensajes(conexion);
     }
 
     public ResultadoEnvioAudio enviarAudioAPrivado(Long usuarioId, String usuarioNombre, File archivoWav, byte[] datosWav) {
@@ -36,8 +35,7 @@ public class ControladorAudio {
                         usuarioNombre,
                         ruta,
                         mime,
-                        duracionSeg,
-                        audioBase64
+                        duracionSeg
                 ));
     }
 
@@ -49,8 +47,7 @@ public class ControladorAudio {
                         canalId,
                         ruta,
                         mime,
-                        duracionSeg,
-                        audioBase64
+                        duracionSeg
                 ));
     }
 
@@ -74,14 +71,12 @@ public class ControladorAudio {
             }
 
             try {
-                registroLocal.registrar(respuesta.rutaArchivo, analisis.duracionSegundos, base64, MIME_WAV);
+                boolean enviado = registroLocal.registrar(respuesta.rutaArchivo, analisis.duracionSegundos, base64, MIME_WAV);
+                if (!enviado) {
+                    return ResultadoEnvioAudio.fallo("El servidor no confirmó el envío del audio");
+                }
             } catch (IOException e) {
                 return ResultadoEnvioAudio.fallo("Error enviando audio al servidor: " + e.getMessage());
-            } catch (java.sql.SQLException e) {
-                // Persistencia local falló pero el audio fue subido correctamente.
-                return ResultadoEnvioAudio.exito(respuesta.rutaArchivo, analisis.duracionSegundos,
-                        respuesta.mensaje != null ? respuesta.mensaje : "Audio enviado (sin registrar localmente)"
-                );
             }
 
             return ResultadoEnvioAudio.exito(respuesta.rutaArchivo, analisis.duracionSegundos, respuesta.mensaje);
@@ -115,7 +110,7 @@ public class ControladorAudio {
 
     @FunctionalInterface
     private interface RegistroLocal {
-        void registrar(String rutaArchivo, int duracionSeg, String audioBase64, String mime) throws IOException, java.sql.SQLException;
+        boolean registrar(String rutaArchivo, int duracionSeg, String audioBase64, String mime) throws IOException;
     }
 
     private static class AnalisisWav {

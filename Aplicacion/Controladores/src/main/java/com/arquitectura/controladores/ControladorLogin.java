@@ -6,6 +6,7 @@ import com.arquitectura.servicios.ServicioComandosChat;
 import com.arquitectura.servicios.ObservadorEventosChat;
 import com.arquitectura.servicios.ServicioContextoDatos;
 
+import java.io.IOException;
 import java.util.Base64;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -32,16 +33,24 @@ public class ControladorLogin {
     }
 
     public boolean iniciarSesion(String usuarioOEmail, String contrasenia) {
+        ultimoMensajeServidor = null;
         try {
             if (!servicioConexion.estaConectado()) servicioConexion.conectar();
+        } catch (IOException ioe) {
+            ultimoMensajeServidor = "No se pudo conectar con el servidor de chat. Verifique la IP configurada o si el servidor está disponible.";
+            return false;
+        } catch (Exception ex) {
+            ultimoMensajeServidor = "No se pudo conectar con el servidor de chat.";
+            return false;
+        }
+        try {
             String ip = obtenerIpLocal();
             var res = comandos.iniciarSesionYEsperarAckConMensaje(usuarioOEmail, contrasenia, ip, 5000);
             boolean ok = res.success;
-            // Mensaje por defecto para login
-            ultimoMensajeServidor = ok ? "Login exitoso" : "Credenciales inválidas";
-            // Sobrescribir con mensaje del servidor si existe
             if (res.message != null && !res.message.isEmpty()) {
                 ultimoMensajeServidor = res.message;
+            } else {
+                ultimoMensajeServidor = ok ? "Login exitoso" : "Credenciales inválidas";
             }
             if (!ok) return false;
             System.out.println(ok);
@@ -115,6 +124,9 @@ public class ControladorLogin {
             configurarContextoLocal(clienteSesion);
             return true;
         } catch (Exception ignored) {
+            if (ultimoMensajeServidor == null || ultimoMensajeServidor.isBlank()) {
+                ultimoMensajeServidor = "No se pudo completar el inicio de sesión. Verifique la conexión con el servidor.";
+            }
             return false;
         }
     }
