@@ -1,5 +1,6 @@
 package com.arquitectura.servicios;
 
+import com.arquitectura.config.ProveedorConexionCliente;
 import com.arquitectura.infra.net.OyenteMensajesChat;
 import com.arquitectura.repositorios.RepositorioMensajes;
 
@@ -130,6 +131,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
     }
 
     private void procesarMessageSync(String json) {
+        esperarContextoDatos();
         try {
             String compact = json.replace('\n',' ').replace('\r',' ');
             String payload = extraerObjetoPayload(compact);
@@ -236,6 +238,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
     }
 
     private void procesarEventoMensaje(String json) {
+        esperarContextoDatos();
         try {
             String compact = json.replace('\n',' ').replace('\r',' ');
             String command = extraerCampo(compact, "command");
@@ -599,5 +602,26 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(iso);
             return java.sql.Timestamp.valueOf(ldt);
         } catch (Exception e) { return null; }
+    }
+
+    private void esperarContextoDatos() {
+        long inicio = System.currentTimeMillis();
+        final long maxEsperaMs = 4000L;
+        while (!contextoDisponible()) {
+            if (System.currentTimeMillis() - inicio > maxEsperaMs) {
+                System.out.println("[ObservadorEventosChat] Contexto de datos no disponible tras " + maxEsperaMs + "ms; continuando de todas formas.");
+                break;
+            }
+            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+        }
+    }
+
+    private boolean contextoDisponible() {
+        try {
+            Long ctx = ProveedorConexionCliente.instancia().obtenerContextoUsuarioId();
+            return ctx != null;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 }
