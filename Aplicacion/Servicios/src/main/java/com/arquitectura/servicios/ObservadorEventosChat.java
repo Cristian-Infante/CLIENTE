@@ -76,7 +76,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 String canalObj = extraerObjeto(payloadMensaje, "canal");
                 if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
             }
-            Long id = extraerLong(payloadMensaje, "id");
+            Long id = obtenerCampoLongRaiz(payloadMensaje, "serverId", "id", "mensajeId", "messageId");
             Long emisor = obtenerCampoLong(payloadMensaje, "emisor", "emisorId");
             String tipo = obtenerCampoTexto(payloadMensaje, "tipo", "tipoMensaje");
             String timeStamp = obtenerCampoTexto(payloadMensaje, "timeStamp", "timestamp");
@@ -158,7 +158,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 Long receptor = obtenerCampoLong(obj, "receptor", "receptorId");
                 String receptorNombre = obtenerCampoTextoPermitirNulo(obj, "receptorNombre", "nombreReceptor", "receptor_nombre", "receptorNombreUsuario", "receptorName");
                 Long canalId = obtenerCampoLong(obj, "canalId");
-                Long serverId = obtenerCampoLong(obj, "id");
+                Long serverId = obtenerCampoLongRaiz(obj, "serverId", "mensajeId", "messageId", "id");
                 java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(obj, "timeStamp", "timestamp"));
                 String tipoConversacion = obtenerCampoTexto(obj, "tipoConversacion");
                 boolean esCanal = canalId != null || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
@@ -255,7 +255,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 String canalObj = extraerObjeto(payloadMensaje, "canal");
                 if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
             }
-            Long serverId = obtenerCampoLong(payloadMensaje, "id");
+            Long serverId = obtenerCampoLongRaiz(payloadMensaje, "serverId", "mensajeId", "messageId", "id");
             java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payloadMensaje, "timeStamp", "timestamp"));
             String tipoConversacion = obtenerCampoTexto(payloadMensaje, "tipoConversacion");
             boolean esCanal = contieneEventoCanal(compact) || "NEW_CHANNEL_MESSAGE".equalsIgnoreCase(command) || (canalId != null) || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
@@ -419,6 +419,117 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             if (interno != null) return interno;
         }
         return payload;
+    }
+
+    private static Long obtenerCampoLongRaiz(String json, String... nombres) {
+        if (json == null || nombres == null) return null;
+        for (String nombre : nombres) {
+            if (nombre == null) continue;
+            Long valor = extraerLongNivelRaiz(json, nombre);
+            if (valor != null) return valor;
+        }
+        return null;
+    }
+
+    private static Long extraerLongNivelRaiz(String json, String campo) {
+        String valor = extraerValorNivelRaiz(json, campo);
+        if (valor == null) return null;
+        valor = valor.trim();
+        if (valor.isEmpty() || "null".equalsIgnoreCase(valor)) return null;
+        try {
+            return Long.parseLong(valor);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private static String extraerValorNivelRaiz(String json, String campo) {
+        if (json == null || campo == null) return null;
+        int depth = 0;
+        boolean inString = false;
+        boolean escape = false;
+        StringBuilder claveActual = null;
+        String clave = null;
+        int len = json.length();
+        for (int i = 0; i < len; i++) {
+            char ch = json.charAt(i);
+            if (inString) {
+                if (escape) {
+                    escape = false;
+                    if (claveActual != null) claveActual.append(ch);
+                    continue;
+                }
+                if (ch == '\\') {
+                    escape = true;
+                    continue;
+                }
+                if (ch == '"') {
+                    inString = false;
+                    if (claveActual != null) {
+                        clave = claveActual.toString();
+                        claveActual = null;
+                    }
+                    continue;
+                }
+                if (claveActual != null) claveActual.append(ch);
+                continue;
+            }
+            switch (ch) {
+                case '"' -> {
+                    if (depth == 1) {
+                        claveActual = new StringBuilder();
+                    } else {
+                        claveActual = null;
+                    }
+                    inString = true;
+                }
+                case '{', '[' -> depth++;
+                case '}', ']' -> {
+                    if (depth > 0) depth--;
+                    if (depth < 1) clave = null;
+                }
+                case ':' -> {
+                    if (depth == 1 && campo.equals(clave)) {
+                        int j = i + 1;
+                        while (j < len && Character.isWhitespace(json.charAt(j))) j++;
+                        if (j >= len) return null;
+                        char inicio = json.charAt(j);
+                        if (inicio == '"') {
+                            j++;
+                            StringBuilder sb = new StringBuilder();
+                            boolean esc = false;
+                            while (j < len) {
+                                char c = json.charAt(j);
+                                if (esc) {
+                                    sb.append(c);
+                                    esc = false;
+                                } else if (c == '\\') {
+                                    esc = true;
+                                } else if (c == '"') {
+                                    return sb.toString();
+                                } else {
+                                    sb.append(c);
+                                }
+                                j++;
+                            }
+                            return sb.toString();
+                        } else {
+                            int start = j;
+                            while (j < len) {
+                                char c = json.charAt(j);
+                                if (c == ',' || c == '}' || c == ']') break;
+                                j++;
+                            }
+                            return json.substring(start, j).trim();
+                        }
+                    }
+                }
+                case ',' -> {
+                    if (depth == 1) clave = null;
+                }
+            }
+        }
+        return null;
     }
 
     private static String obtenerCampoTexto(String json, String... nombres) {
