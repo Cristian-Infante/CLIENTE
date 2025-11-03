@@ -41,6 +41,8 @@ public class VistaChatPrincipal extends JFrame {
     private JDialog dialogoSincronizacion;
     private JLabel lblSincronizacion;
     private JProgressBar barraSincronizacion;
+    private JDialog avisoInicioSincronizacion;
+    private Timer temporizadorAvisoSincronizacion;
 
     // Controladores
     private final ControladorChat chatController;
@@ -152,7 +154,10 @@ public class VistaChatPrincipal extends JFrame {
 
             @Override
             public void onSincronizacionMensajesIniciada(Long totalEsperado) {
-                SwingUtilities.invokeLater(() -> mostrarDialogoSincronizacion(totalEsperado));
+                SwingUtilities.invokeLater(() -> {
+                    mostrarAvisoInicioSincronizacion(totalEsperado);
+                    mostrarDialogoSincronizacion(totalEsperado);
+                });
             }
 
             @Override
@@ -504,7 +509,47 @@ public class VistaChatPrincipal extends JFrame {
         }
     }
 
+    private void mostrarAvisoInicioSincronizacion(Long totalEsperado) {
+        ocultarAvisoInicioSincronizacion();
+        if (!isDisplayable()) {
+            return;
+        }
+        String detalle = (totalEsperado != null && totalEsperado > 0)
+                ? "Sincronización iniciada: " + totalEsperado + (totalEsperado == 1 ? " mensaje" : " mensajes") + "."
+                : "Sincronización de mensajes iniciada.";
+        JOptionPane pane = new JOptionPane(detalle, JOptionPane.INFORMATION_MESSAGE);
+        avisoInicioSincronizacion = pane.createDialog(this, "Sincronización iniciada");
+        avisoInicioSincronizacion.setModal(false);
+        avisoInicioSincronizacion.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        avisoInicioSincronizacion.setAlwaysOnTop(true);
+        avisoInicioSincronizacion.setLocationRelativeTo(this);
+        avisoInicioSincronizacion.setVisible(true);
+        if (temporizadorAvisoSincronizacion != null) {
+            temporizadorAvisoSincronizacion.stop();
+        }
+        temporizadorAvisoSincronizacion = new Timer(2500, e -> ocultarAvisoInicioSincronizacion());
+        temporizadorAvisoSincronizacion.setRepeats(false);
+        temporizadorAvisoSincronizacion.start();
+    }
+
+    private void ocultarAvisoInicioSincronizacion() {
+        if (temporizadorAvisoSincronizacion != null) {
+            temporizadorAvisoSincronizacion.stop();
+            temporizadorAvisoSincronizacion = null;
+        }
+        if (avisoInicioSincronizacion != null) {
+            try {
+                avisoInicioSincronizacion.setVisible(false);
+            } catch (Exception ignored) {}
+            try {
+                avisoInicioSincronizacion.dispose();
+            } catch (Exception ignored) {}
+            avisoInicioSincronizacion = null;
+        }
+    }
+
     private void finalizarDialogoSincronizacion(int insertados, Long totalEsperado, boolean exito, String mensajeError) {
+        ocultarAvisoInicioSincronizacion();
         if (dialogoSincronizacion != null) {
             dialogoSincronizacion.setVisible(false);
         }
@@ -963,9 +1008,11 @@ public class VistaChatPrincipal extends JFrame {
         if (hora.length() > 5) hora = hora.substring(0, 5);
         String nombre = obtenerNombreEmisor(mensaje);
 
-        JPanel fila = new JPanel(new BorderLayout());
+        JPanel fila = new JPanel(new GridBagLayout());
         fila.setOpaque(false);
         fila.setBorder(new EmptyBorder(0, 5, 0, 5));
+        fila.setAlignmentX(Component.LEFT_ALIGNMENT);
+        fila.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         JPanel burbuja = new JPanel();
         burbuja.setLayout(new BoxLayout(burbuja, BoxLayout.Y_AXIS));
@@ -976,7 +1023,8 @@ public class VistaChatPrincipal extends JFrame {
                 new EmptyBorder(8, 12, 8, 12)
         ));
         burbuja.setAlignmentX(Component.LEFT_ALIGNMENT);
-        burbuja.setMaximumSize(new Dimension(600, Integer.MAX_VALUE));
+        burbuja.setAlignmentY(Component.TOP_ALIGNMENT);
+        burbuja.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         JLabel lblEncabezado = new JLabel("[" + hora + "] " + nombre);
         lblEncabezado.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1002,7 +1050,13 @@ public class VistaChatPrincipal extends JFrame {
             burbuja.add(crearTextoMultilinea("Tipo " + (mensaje.getTipo() != null ? mensaje.getTipo() : "desconocido")));
         }
 
-        fila.add(burbuja, BorderLayout.WEST);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.WEST;
+        fila.add(burbuja, gbc);
 
         return fila;
     }
@@ -1023,6 +1077,8 @@ public class VistaChatPrincipal extends JFrame {
         area.setOpaque(false);
         area.setBorder(null);
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
+        area.setAlignmentY(Component.TOP_ALIGNMENT);
+        area.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
         area.setFont(area.getFont().deriveFont(13f));
         return area;
     }
