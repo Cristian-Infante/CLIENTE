@@ -308,6 +308,10 @@ public class ServicioComandosChat {
             Pattern pid = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
             Pattern pnom = Pattern.compile("\\\"nombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern ppriv = Pattern.compile("\\\"privado\\\"\\s*:\\s*(true|false)");
+            Pattern pidUsuario = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
+            Pattern puser = Pattern.compile("\\\"usuario\\\"\\s*:\\s*\\\"(.*?)\\\"");
+            Pattern pmail = Pattern.compile("\\\"email\\\"\\s*:\\s*\\\"(.*?)\\\"");
+            Pattern pcon = Pattern.compile("\\\"conectado\\\"\\s*:\\s*(true|false)");
             for (String obj : objetos) {
                 Matcher mid = pid.matcher(obj);
                 Matcher mnom = pnom.matcher(obj);
@@ -316,10 +320,70 @@ public class ServicioComandosChat {
                 if (mid.find()) { try { c.setId(Long.parseLong(mid.group(1))); } catch (Exception ignored) {} }
                 if (mnom.find()) { c.setNombre(mnom.group(1)); }
                 if (mpriv.find()) { c.setPrivado(Boolean.parseBoolean(mpriv.group(1))); }
+
+                int idxUsuarios = obj.indexOf("\"usuarios\"");
+                if (idxUsuarios >= 0) {
+                    int startUsuarios = obj.indexOf('[', idxUsuarios);
+                    if (startUsuarios >= 0) {
+                        int depthUsuarios = 0;
+                        int endUsuarios = -1;
+                        for (int i = startUsuarios; i < obj.length(); i++) {
+                            char ch = obj.charAt(i);
+                            if (ch == '[') depthUsuarios++;
+                            else if (ch == ']') {
+                                depthUsuarios--;
+                                if (depthUsuarios == 0) { endUsuarios = i; break; }
+                            }
+                        }
+                        if (endUsuarios > startUsuarios) {
+                            String usuariosArray = obj.substring(startUsuarios + 1, endUsuarios);
+                            java.util.List<String> usuariosJson = extraerObjetosDeArrayBruto(usuariosArray);
+                            java.util.List<com.arquitectura.entidades.ClienteLocal> miembros = new java.util.ArrayList<>();
+                            for (String u : usuariosJson) {
+                                if (u == null || u.isBlank()) continue;
+                                Matcher midU = pidUsuario.matcher(u);
+                                Matcher muser = puser.matcher(u);
+                                Matcher mmail = pmail.matcher(u);
+                                Matcher mcon = pcon.matcher(u);
+                                com.arquitectura.entidades.ClienteLocal cli = new com.arquitectura.entidades.ClienteLocal();
+                                if (midU.find()) { try { cli.setId(Long.parseLong(midU.group(1))); } catch (Exception ignored) {} }
+                                if (muser.find()) cli.setNombreDeUsuario(muser.group(1));
+                                if (mmail.find()) cli.setEmail(mmail.group(1));
+                                if (mcon.find()) cli.setEstado(Boolean.parseBoolean(mcon.group(1)));
+                                miembros.add(cli);
+                            }
+                            if (!miembros.isEmpty()) {
+                                c.setMiembros(miembros);
+                            }
+                        }
+                    }
+                }
+
                 if (c.getNombre() != null || c.getId() != null) canales.add(c);
             }
         } catch (Exception ignored) {}
         return canales;
+    }
+
+    private static java.util.List<String> extraerObjetosDeArrayBruto(String arrayText) {
+        java.util.List<String> objetos = new java.util.ArrayList<>();
+        if (arrayText == null) return objetos;
+        int depth = 0;
+        int objStart = -1;
+        for (int i = 0; i < arrayText.length(); i++) {
+            char ch = arrayText.charAt(i);
+            if (ch == '{') {
+                if (depth == 0) objStart = i;
+                depth++;
+            } else if (ch == '}') {
+                depth--;
+                if (depth == 0 && objStart >= 0) {
+                    objetos.add(arrayText.substring(objStart, i + 1));
+                    objStart = -1;
+                }
+            }
+        }
+        return objetos;
     }
 
     // Modelos simples para invitaciones

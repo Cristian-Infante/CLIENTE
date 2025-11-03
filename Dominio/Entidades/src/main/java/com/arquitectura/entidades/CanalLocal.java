@@ -4,6 +4,7 @@ public class CanalLocal {
     private Long id;
     private String nombre;
     private Boolean privado;
+    private java.util.List<ClienteLocal> miembros;
 
     public CanalLocal() {
     }
@@ -36,5 +37,13 @@ public class CanalLocal {
 
     public void setPrivado(Boolean privado) {
         this.privado = privado;
+    }
+
+    public java.util.List<ClienteLocal> getMiembros() {
+        return miembros;
+    }
+
+    public void setMiembros(java.util.List<ClienteLocal> miembros) {
+        this.miembros = miembros;
     }
 }

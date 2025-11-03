@@ -10,7 +10,6 @@ import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ServicioMensajes;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -23,7 +22,7 @@ public class ControladorChat {
     public ControladorChat(ClienteLocal clienteActual, ServicioConexionChat conexion) {
         this.clienteActual = clienteActual;
         this.conexion = conexion;
-        this.servicioMensajes = new ServicioMensajes(new RepositorioMensajes(), conexion);
+        this.servicioMensajes = new ServicioMensajes(conexion);
         this.cacheNombres = new java.util.concurrent.ConcurrentHashMap<>();
         if (clienteActual != null && clienteActual.getId() != null && clienteActual.getNombreDeUsuario() != null) {
             cacheNombres.put(clienteActual.getId(), clienteActual.getNombreDeUsuario());
@@ -32,7 +31,7 @@ public class ControladorChat {
 
     public boolean enviarMensajeUsuario(Long receptorId, String receptorNombre, String texto) {
         try {
-            servicioMensajes.enviarTextoAPrivado(
+            return servicioMensajes.enviarTextoAPrivado(
                     clienteActual.getId(),
                     clienteActual.getNombreDeUsuario(),
                     receptorId,
@@ -40,29 +39,22 @@ public class ControladorChat {
                     texto,
                     "TEXTO"
             );
-            return true;
         } catch (IOException e) {
             return false; // error real de IO hacia servidor
-        } catch (SQLException e) {
-            // Fallo de persistencia local no debe impedir marcar envío como exitoso si ya se intentó enviar
-            return true;
         }
     }
 
     public boolean enviarMensajeCanal(Long canalId, String nombreCanal, String texto) {
         try {
-            servicioMensajes.enviarTextoACanal(
+            return servicioMensajes.enviarTextoACanal(
                     clienteActual.getId(),
                     clienteActual.getNombreDeUsuario(),
                     canalId,
                     texto,
                     "TEXTO"
             );
-            return true;
         } catch (IOException e) {
             return false;
-        } catch (SQLException e) {
-            return true;
         }
     }
 
