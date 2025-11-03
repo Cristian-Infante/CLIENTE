@@ -335,6 +335,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         if (compact.contains("\"command\":\"NEW_CHANNEL_MESSAGE\"")) return true;
         if (!compact.contains("\"command\":\"EVENT\"")) return false;
         if (compact.contains("\"tipo\":\"NEW_CHANNEL_MESSAGE\"")) return true;
+        if (compact.contains("\"evento\":\"NEW_CHANNEL_MESSAGE\"")) return true;
         int idx = compact.indexOf("\"canalId\":");
         if (idx >= 0) {
             idx += "\"canalId\":".length();
@@ -369,6 +370,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         if (compact.contains("\"command\":\"NEW_MESSAGE\"")) return true;
         if (!compact.contains("\"command\":\"EVENT\"")) return false;
         if (compact.contains("\"tipo\":\"NEW_MESSAGE\"")) return true;
+        if (compact.contains("\"evento\":\"NEW_MESSAGE\"")) return true;
         int idxCanal = compact.indexOf("\"canalId\":");
         if (idxCanal >= 0) {
             idxCanal += "\"canalId\":".length();
