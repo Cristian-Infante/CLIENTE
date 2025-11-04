@@ -327,6 +327,12 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             
             if ("USER_STATUS_CHANGED".equalsIgnoreCase(tipoEvento)) {
                 procesarCambioEstadoUsuario(payload);
+            } else if ("NEW_MESSAGE".equalsIgnoreCase(tipoEvento)) {
+                System.out.println("[ObservadorEventosChat] Procesando NEW_MESSAGE desde servidor");
+                procesarEventoMensaje(json);
+            } else if ("NEW_CHANNEL_MESSAGE".equalsIgnoreCase(tipoEvento)) {
+                System.out.println("[ObservadorEventosChat] Procesando NEW_CHANNEL_MESSAGE desde servidor");
+                procesarEventoMensaje(json);
             } else {
                 System.out.println("[ObservadorEventosChat] Evento no manejado: " + tipoEvento);
             }
