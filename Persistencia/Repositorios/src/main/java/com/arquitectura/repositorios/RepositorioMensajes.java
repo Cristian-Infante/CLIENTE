@@ -1,8 +1,13 @@
 package com.arquitectura.repositorios;
 
-import com.arquitectura.config.ProveedorConexionCliente;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
 
-import java.sql.*;
+import com.arquitectura.config.ProveedorConexionCliente;
 
 public class RepositorioMensajes {
 
@@ -448,5 +453,262 @@ public class RepositorioMensajes {
             limpia = limpia.substring(idx + 1);
         }
         return limpia;
+    }
+
+    /**
+     * Verifica si ya existe un mensaje con el serverId dado usando una consulta optimizada
+     */
+    private boolean existeServerId(Connection cn, Long serverId) throws SQLException {
+        if (serverId == null) return false;
+        try (PreparedStatement ps = cn.prepareStatement(
+                "SELECT 1 FROM mensajes WHERE server_id = ? AND contexto_usuario_id = ? LIMIT 1")) {
+            ps.setLong(1, serverId);
+            ps.setLong(2, contextoActual());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    /**
+     * Inserta múltiples mensajes del servidor de manera optimizada usando batch processing
+     * @param mensajesJson Lista de objetos JSON de mensajes
+     * @return número de mensajes insertados exitosamente
+     */
+    public int insertarMensajesDesdeServidorBatch(java.util.List<String> mensajesJson) throws SQLException {
+        if (mensajesJson == null || mensajesJson.isEmpty()) return 0;
+
+        int insertados = 0;
+        long contexto = contextoActual();
+        
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion()) {
+            cn.setAutoCommit(false); // Iniciar transacción
+
+            // Preparar statements para inserción
+            String sqlTexto = "INSERT INTO mensajes (server_id, server_ts, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, contexto_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)";
+            String sqlAudio = "INSERT INTO mensajes (server_id, server_ts, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, audio_base64, audio_mime, audio_duracion_seg, contexto_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)";
+
+            try (PreparedStatement psTexto = cn.prepareStatement(sqlTexto);
+                 PreparedStatement psAudio = cn.prepareStatement(sqlAudio)) {
+
+                // Procesar cada mensaje
+                for (String objJson : mensajesJson) {
+                    try {
+                        // Extraer campos básicos usando métodos simplificados
+                        Long serverId = extraerLongSimple(objJson, "serverId", "mensajeId", "messageId", "id");
+                        if (serverId != null && existeServerId(cn, serverId)) {
+                            continue; // Saltar mensajes duplicados
+                        }
+
+                        String tipoMsg = extraerTextoSimple(objJson, "tipo", "tipoMensaje");
+                        Long emisor = extraerLongSimple(objJson, "emisor", "emisorId");
+                        String emisorNombre = extraerTextoSimple(objJson, "emisorNombre", "nombreEmisor");
+                        Long receptor = extraerLongSimple(objJson, "receptor", "receptorId");
+                        String receptorNombre = extraerTextoSimple(objJson, "receptorNombre", "nombreReceptor");
+                        Long canalId = extraerLongSimple(objJson, "canalId");
+                        String timestamp = extraerTextoSimple(objJson, "timeStamp", "timestamp");
+                        Boolean esAudio = extraerBooleanSimple(objJson, "esAudio", "audio");
+                        
+                        // Mejorar detección de audio basándose en el tipo de mensaje
+                        if (esAudio == null && "AUDIO".equalsIgnoreCase(tipoMsg)) {
+                            esAudio = true;
+                        }
+                        
+                        java.sql.Timestamp serverTs = null;
+                        if (timestamp != null) {
+                            try {
+                                serverTs = java.sql.Timestamp.valueOf(timestamp.replace("T", " ").replace("Z", ""));
+                            } catch (Exception e) {
+                                serverTs = new java.sql.Timestamp(System.currentTimeMillis());
+                            }
+                        }
+
+                        // Decidir si es audio o texto
+                        if (Boolean.TRUE.equals(esAudio)) {
+                            // Mensaje de audio - extraer desde objeto contenido
+                            String contenidoObj = extraerObjetoContenido(objJson);
+                            String transcripcion = null;
+                            String audioBase64 = null;
+                            String mime = null;
+                            Integer duracion = null;
+                            
+                            if (contenidoObj != null) {
+                                // Extraer campos del objeto contenido
+                                transcripcion = extraerTextoSimple(contenidoObj, "transcripcion", "transcripcionTexto");
+                                audioBase64 = extraerTextoSimple(contenidoObj, "audioBase64", "base64", "audio");
+                                mime = extraerTextoSimple(contenidoObj, "mime", "mimeType", "tipoMime");
+                                duracion = extraerIntegerSimple(contenidoObj, "duracionSeg", "duracion");
+                            }
+                            
+                            // Fallback: buscar directamente en el JSON raíz
+                            if (transcripcion == null) transcripcion = extraerTextoSimple(objJson, "transcripcion", "texto");
+                            if (audioBase64 == null) audioBase64 = extraerTextoSimple(objJson, "audioBase64", "base64");
+                            if (mime == null) mime = extraerTextoSimple(objJson, "audioMime", "mime");
+                            if (duracion == null) duracion = extraerIntegerSimple(objJson, "audioDuracionSeg", "duracion");
+
+                            // Agregar al batch de audio
+                            int idx = 1;
+                            if (serverId != null) psAudio.setLong(idx++, serverId); else psAudio.setNull(idx++, Types.BIGINT);
+                            if (serverTs != null) psAudio.setTimestamp(idx++, serverTs); else psAudio.setNull(idx++, Types.TIMESTAMP);
+                            psAudio.setString(idx++, tipoMsg != null ? tipoMsg : "AUDIO");
+                            psAudio.setLong(idx++, emisor != null ? emisor : 0L);
+                            if (emisorNombre != null) psAudio.setString(idx++, emisorNombre); else psAudio.setNull(idx++, Types.VARCHAR);
+                            if (receptor != null) psAudio.setLong(idx++, receptor); else psAudio.setNull(idx++, Types.BIGINT);
+                            if (receptorNombre != null) psAudio.setString(idx++, receptorNombre); else psAudio.setNull(idx++, Types.VARCHAR);
+                            if (canalId != null) psAudio.setLong(idx++, canalId); else psAudio.setNull(idx++, Types.BIGINT);
+                            if (transcripcion != null) psAudio.setString(idx++, transcripcion); else psAudio.setNull(idx++, Types.CLOB);
+                            if (audioBase64 != null) psAudio.setString(idx++, audioBase64); else psAudio.setNull(idx++, Types.CLOB);
+                            if (mime != null) psAudio.setString(idx++, mime); else psAudio.setNull(idx++, Types.VARCHAR);
+                            if (duracion != null) psAudio.setInt(idx++, duracion); else psAudio.setNull(idx++, Types.INTEGER);
+                            psAudio.setLong(idx++, contexto);
+                            psAudio.addBatch();
+                        } else {
+                            // Mensaje de texto - extraer desde objeto contenido
+                            String contenido = null;
+                            String contenidoObj = extraerObjetoContenido(objJson);
+                            
+                            if (contenidoObj != null) {
+                                // Buscar contenido dentro del objeto contenido
+                                contenido = extraerTextoSimple(contenidoObj, "contenido", "texto", "mensaje");
+                            }
+                            
+                            // Fallback: buscar directamente en el JSON raíz
+                            if (contenido == null) {
+                                contenido = extraerTextoSimple(objJson, "contenido", "texto", "mensaje");
+                            }
+
+                            // Agregar al batch de texto
+                            int idx = 1;
+                            if (serverId != null) psTexto.setLong(idx++, serverId); else psTexto.setNull(idx++, Types.BIGINT);
+                            if (serverTs != null) psTexto.setTimestamp(idx++, serverTs); else psTexto.setNull(idx++, Types.TIMESTAMP);
+                            psTexto.setString(idx++, tipoMsg != null ? tipoMsg : "TEXTO");
+                            psTexto.setLong(idx++, emisor != null ? emisor : 0L);
+                            if (emisorNombre != null) psTexto.setString(idx++, emisorNombre); else psTexto.setNull(idx++, Types.VARCHAR);
+                            if (receptor != null) psTexto.setLong(idx++, receptor); else psTexto.setNull(idx++, Types.BIGINT);
+                            if (receptorNombre != null) psTexto.setString(idx++, receptorNombre); else psTexto.setNull(idx++, Types.VARCHAR);
+                            if (canalId != null) psTexto.setLong(idx++, canalId); else psTexto.setNull(idx++, Types.BIGINT);
+                            if (contenido != null) psTexto.setString(idx++, contenido); else psTexto.setNull(idx++, Types.CLOB);
+                            psTexto.setLong(idx++, contexto);
+                            psTexto.addBatch();
+                        }
+                        insertados++;
+                    } catch (Exception e) {
+                        // Log error pero continuar con otros mensajes
+                        System.err.println("Error procesando mensaje en batch: " + e.getMessage());
+                    }
+                }
+
+                // Ejecutar los batches
+                psTexto.executeBatch();
+                psAudio.executeBatch();
+                cn.commit(); // Confirmar transacción
+            } catch (SQLException e) {
+                cn.rollback(); // Revertir en caso de error
+                throw e;
+            }
+        }
+        return insertados;
+    }
+
+    // Métodos de extracción simplificados para mejor rendimiento
+    private String extraerTextoSimple(String json, String... claves) {
+        if (json == null) return null;
+        for (String clave : claves) {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"" + clave + "\"\\s*:\\s*\"([^\"]*)\"|\"" + clave + "\"\\s*:\\s*null");
+            java.util.regex.Matcher m = p.matcher(json);
+            if (m.find()) {
+                String valor = m.group(1);
+                return valor != null && !valor.trim().isEmpty() ? valor : null;
+            }
+        }
+        return null;
+    }
+
+    private Long extraerLongSimple(String json, String... claves) {
+        if (json == null) return null;
+        for (String clave : claves) {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"" + clave + "\"\\s*:\\s*(\\d+)|\"" + clave + "\"\\s*:\\s*null");
+            java.util.regex.Matcher m = p.matcher(json);
+            if (m.find()) {
+                String valor = m.group(1);
+                if (valor != null) {
+                    try {
+                        return Long.valueOf(valor);
+                    } catch (NumberFormatException e) {
+                        // Continuar con siguiente clave
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private Boolean extraerBooleanSimple(String json, String... claves) {
+        if (json == null) return null;
+        for (String clave : claves) {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"" + clave + "\"\\s*:\\s*(true|false)|\"" + clave + "\"\\s*:\\s*null");
+            java.util.regex.Matcher m = p.matcher(json);
+            if (m.find()) {
+                String valor = m.group(1);
+                if (valor != null) {
+                    return Boolean.valueOf(valor);
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer extraerIntegerSimple(String json, String... claves) {
+        if (json == null) return null;
+        for (String clave : claves) {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"" + clave + "\"\\s*:\\s*(\\d+)|\"" + clave + "\"\\s*:\\s*null");
+            java.util.regex.Matcher m = p.matcher(json);
+            if (m.find()) {
+                String valor = m.group(1);
+                if (valor != null) {
+                    try {
+                        return Integer.valueOf(valor);
+                    } catch (NumberFormatException e) {
+                        // Continuar con siguiente clave
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Extrae el objeto "contenido" del JSON principal
+     */
+    private String extraerObjetoContenido(String json) {
+        if (json == null) return null;
+        
+        // Buscar el inicio del objeto contenido
+        int contenidoIndex = json.indexOf("\"contenido\"");
+        if (contenidoIndex == -1) return null;
+        
+        // Buscar el inicio del objeto después de los dos puntos
+        int startIndex = json.indexOf("{", contenidoIndex);
+        if (startIndex == -1) return null;
+        
+        // Contar llaves para encontrar el final del objeto
+        int braceCount = 1;
+        int endIndex = startIndex + 1;
+        
+        while (endIndex < json.length() && braceCount > 0) {
+            char c = json.charAt(endIndex);
+            if (c == '{') {
+                braceCount++;
+            } else if (c == '}') {
+                braceCount--;
+            }
+            endIndex++;
+        }
+        
+        if (braceCount == 0) {
+            return json.substring(startIndex, endIndex);
+        }
+        
+        return null;
     }
 }

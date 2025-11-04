@@ -1,22 +1,45 @@
 package com.arquitectura.vistas;
 
-import com.arquitectura.controladores.ControladorLogin;
-import com.arquitectura.entidades.ClienteLocal;
-import com.arquitectura.servicios.ServicioConexionChat;
-import com.arquitectura.config.ProveedorConexionCliente;
-import com.arquitectura.infra.net.OyenteMensajesChat;
-import com.arquitectura.servicios.ObservadorEventosChat;
-
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
+import java.awt.Insets;
 import java.io.File;
 import java.nio.file.Files;
+
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.border.EmptyBorder;
+
+import com.arquitectura.controladores.ControladorLogin;
+import com.arquitectura.entidades.ClienteLocal;
+import com.arquitectura.infra.net.OyenteMensajesChat;
+import com.arquitectura.servicios.ObservadorEventosChat;
+import com.arquitectura.servicios.ServicioConexionChat;
 
 public class VistaLogin extends JFrame {
     private final ControladorLogin controladorLogin;
     private OyenteMensajesChat oyenteEventos;
     private volatile boolean notificadoDesconexion = false;
+    private volatile boolean sincronizacionIniciada = false;
+    private volatile Long totalMensajesEsperados = null;
 
     // Componentes comunes
     private JTabbedPane panelPestanas;
@@ -225,10 +248,16 @@ public class VistaLogin extends JFrame {
 
     private void abrirVentanaPrincipal() {
         ClienteLocal usuarioActual = controladorLogin.getClienteSesion();
+        final boolean haySync = sincronizacionIniciada;
+        final Long totalEsperado = totalMensajesEsperados;
         dispose();
         SwingUtilities.invokeLater(() -> {
             ServicioConexionChat conexion = controladorLogin.getServicioConexion();
             VistaChatPrincipal main = new VistaChatPrincipal(usuarioActual, conexion);
+            // Si hubo sincronización durante el login, mostrar el modal
+            if (haySync) {
+                main.mostrarModalSincronizacionInicial(totalEsperado);
+            }
             main.setVisible(true);
         });
     }
@@ -277,6 +306,19 @@ public class VistaLogin extends JFrame {
             @Override public void alRecibirMensaje(String mensaje) {
                 if (mensaje == null || notificadoDesconexion) return;
                 String compact = mensaje.replaceAll("\\s+", "");
+                
+                // Detectar MESSAGE_SYNC para sincronización
+                if (compact.contains("\"command\":\"MESSAGE_SYNC\"")) {
+                    sincronizacionIniciada = true;
+                    try {
+                        String totalStr = extraerCampo(mensaje, "totalMensajes");
+                        if (totalStr != null && !totalStr.isEmpty()) {
+                            totalMensajesEsperados = Long.parseLong(totalStr);
+                        }
+                    } catch (NumberFormatException ignored) {}
+                    return;
+                }
+                
                 if (compact.contains("\"command\":\"EVENT\"")) {
                     String tipo = extraerCampo(compact, "tipo");
                     if ("KICKED".equalsIgnoreCase(tipo)) {

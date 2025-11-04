@@ -1,16 +1,15 @@
 package com.arquitectura.servicios;
 
-import com.arquitectura.config.ProveedorConexionCliente;
-import com.arquitectura.entidades.ClienteLocal;
-import com.arquitectura.infra.net.OyenteMensajesChat;
-import com.arquitectura.repositorios.RepositorioMensajes;
-
 import java.sql.SQLException;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.arquitectura.config.ProveedorConexionCliente;
+import com.arquitectura.infra.net.OyenteMensajesChat;
+import com.arquitectura.repositorios.RepositorioMensajes;
 
 /**
  * Observa EVENTs del servidor (nuevos mensajes) y los persiste en la BD local,
@@ -26,8 +25,30 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
     private static final ObservadorEventosChat INSTANCE = new ObservadorEventosChat();
     private static final java.util.Map<ServicioConexionChat, Boolean> REGISTRADOS = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    
+    // Listener para notificaciones de sincronización completada
+    private volatile SincronizacionCompletadaListener sincronizacionListener;
 
     public static ObservadorEventosChat instancia() { return INSTANCE; }
+    
+    public void setSincronizacionListener(SincronizacionCompletadaListener listener) {
+        this.sincronizacionListener = listener;
+    }
+    
+    private void notificarSincronizacionCompletada(int insertados, boolean exito, String mensajeError) {
+        SincronizacionCompletadaListener listener = this.sincronizacionListener;
+        if (listener != null) {
+            // Ejecutar en el hilo de eventos de Swing para actualizar la UI
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                try {
+                    listener.onSincronizacionCompletada(insertados, exito, mensajeError);
+                } catch (Exception e) {
+                    System.err.println("Error al notificar sincronización completada: " + e.getMessage());
+                }
+            });
+        }
+    }
+    
     public void registrarEn(ServicioConexionChat sc) {
         if (sc == null) return;
         synchronized (REGISTRADOS) {
@@ -48,11 +69,6 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         String payloadLog = SanitizadorBase64Logs.truncarCamposBase64(payload);
         String command = extraerCampo(compact, "command");
         registrarLogGenerico(command, payload, raw);
-        if ("EVENT".equalsIgnoreCase(command)) {
-            if (procesarEventoGenerico(payload)) {
-                return;
-            }
-        }
         // Procesar sincronizaciones masivas (log y encolar)
         if (compact.contains("\"command\":\"MESSAGE_SYNC\"")) {
             String ultima = extraerCampo(payload, "ultimaSincronizacion");
@@ -67,10 +83,16 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             sb.append("- payload: ").append(payloadLog).append('\n');
             sb.append("================================\n");
             System.out.println(sb.toString());
-            ServicioEventosMensajes.instancia().notificarSincronizacionIniciada(total);
             ioPool.submit(() -> procesarMessageSync(mensaje));
             return;
         }
+        
+        // Procesar eventos del servidor (como USER_STATUS_CHANGED)
+        if (compact.contains("\"command\":\"EVENT\"")) {
+            ioPool.submit(() -> procesarEventoServidor(mensaje));
+            return;
+        }
+        
         boolean esComandoCanal = contieneEventoCanal(compact);
         boolean esComandoPrivado = contieneEventoPrivado(compact);
         if (!(esComandoCanal || esComandoPrivado)) return;
@@ -137,42 +159,21 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
         System.out.println(sb.toString());
     }
 
-    private boolean procesarEventoGenerico(String payload) {
-        if (payload == null) return false;
-        String tipoEvento = obtenerCampoTexto(payload, "evento", "tipo");
-        if (tipoEvento == null) return false;
-        if ("USER_STATUS_CHANGED".equalsIgnoreCase(tipoEvento)) {
-            Long usuarioId = obtenerCampoLong(payload, "usuarioId", "userId", "id");
-            ClienteLocal usuario = new ClienteLocal();
-            if (usuarioId != null) usuario.setId(usuarioId);
-            String nombre = obtenerCampoTextoPermitirNulo(payload, "usuarioNombre", "nombreUsuario", "usuario");
-            if (nombre != null) usuario.setNombreDeUsuario(nombre);
-            String email = obtenerCampoTextoPermitirNulo(payload, "usuarioEmail", "email");
-            if (email != null) usuario.setEmail(email);
-            Boolean conectado = obtenerCampoBooleano(payload, "conectado", "online", "connected");
-            usuario.setEstado(conectado);
-            Integer sesiones = obtenerCampoEntero(payload, "sesionesActivas", "sesiones", "activeSessions");
-            if (sesiones != null) usuario.setSesionesActivas(sesiones);
-            String timestampIso = obtenerCampoTextoPermitirNulo(payload, "timestamp", "timeStamp");
-            ServicioEventosMensajes.instancia().notificarEstadoUsuarioActualizado(usuario, sesiones, timestampIso);
-            return true;
-        }
-        return false;
-    }
-
     private void procesarMessageSync(String json) {
         esperarContextoDatos();
-        Long total = null;
-        int insertados = 0;
-        boolean exito = false;
-        String errorUsuario = null;
         try {
             String compact = json.replace('\n',' ').replace('\r',' ');
             String payload = extraerObjetoPayload(compact);
             if (payload == null) payload = compact;
-            // Log al inicio del procesamiento para asegurar visibilidad en cualquier ruta
+            
+            // Log al inicio del procesamiento
             String ultima = extraerCampo(payload, "ultimaSincronizacion");
-            try { String t = extraerCampo(payload, "totalMensajes"); if (t != null) total = Long.parseLong(t); } catch (Exception ignored) {}
+            Long total = null; 
+            try { 
+                String t = extraerCampo(payload, "totalMensajes"); 
+                if (t != null) total = Long.valueOf(t); 
+            } catch (Exception ignored) {}
+            
             java.util.List<String> prev = extraerObjetosDeArreglo(payload, "mensajes");
             StringBuilder preSb = new StringBuilder();
             preSb.append("\n==== MESSAGE_SYNC (procesando) ====\n");
@@ -181,10 +182,57 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             preSb.append("- ultimaSincronizacion: ").append(ultima).append('\n');
             preSb.append("================================\n");
             System.out.println(preSb.toString());
+            
             java.util.List<String> objetos = extraerObjetosDeArreglo(payload, "mensajes");
             java.util.Set<Long> canalesNotificar = new java.util.HashSet<>();
             java.util.Set<Long> privadosNotificar = new java.util.HashSet<>();
-            for (String obj : objetos) {
+            int insertados = 0;
+            
+            // Usar inserción por lotes para mejor rendimiento
+            try {
+                insertados = repo.insertarMensajesDesdeServidorBatch(objetos);
+                
+                // Procesar notificaciones por tipo de conversación
+                for (String obj : objetos) {
+                    Long canalId = obtenerCampoLong(obj, "canalId");
+                    Long emisor = obtenerCampoLong(obj, "emisor", "emisorId");
+                    Long receptor = obtenerCampoLong(obj, "receptor", "receptorId");
+                    String tipoConversacion = obtenerCampoTexto(obj, "tipoConversacion");
+                    boolean esCanal = canalId != null || (tipoConversacion != null && "CANAL".equalsIgnoreCase(tipoConversacion));
+                    
+                    if (esCanal && canalId != null) {
+                        canalesNotificar.add(canalId);
+                    } else {
+                        if (emisor != null) privadosNotificar.add(emisor);
+                        if (receptor != null) privadosNotificar.add(receptor);
+                    }
+                }
+            } catch (Exception ex) {
+                System.err.println("Error en inserción batch, fallback a método individual: " + ex.getMessage());
+                // Fallback al método anterior si hay problemas con batch
+                insertados = procesarMensajesIndividual(objetos, canalesNotificar, privadosNotificar);
+            }
+            
+            // Notificar canales y usuarios después del procesamiento
+            for (Long c : canalesNotificar) ServicioEventosMensajes.instancia().notificarCanal(c);
+            for (Long u : privadosNotificar) ServicioEventosMensajes.instancia().notificarPrivado(u);
+            System.out.println("[ObservadorEventosChat] MESSAGE_SYNC procesado. Insertados=" + insertados + ", canalesNotificar=" + canalesNotificar.size() + ", privadosNotificar=" + privadosNotificar.size());
+            
+            // Notificar al listener que la sincronización se completó exitosamente
+            notificarSincronizacionCompletada(insertados, true, null);
+            
+        } catch (Exception e) {
+            System.out.println("[ObservadorEventosChat] Error procesando MESSAGE_SYNC: " + e + " json=" + SanitizadorBase64Logs.truncarCamposBase64(json));
+            // Notificar al listener que la sincronización falló
+            notificarSincronizacionCompletada(0, false, e.getMessage());
+        }
+    }
+
+    // Método auxiliar para el fallback de procesamiento individual
+    private int procesarMensajesIndividual(java.util.List<String> objetos, java.util.Set<Long> canalesNotificar, java.util.Set<Long> privadosNotificar) {
+        int insertados = 0;
+        for (String obj : objetos) {
+            try {
                 String tipoMsg = obtenerCampoTexto(obj, "tipo", "tipoMensaje");
                 Long emisor = obtenerCampoLong(obj, "emisor", "emisorId");
                 String emisorNombre = obtenerCampoTextoPermitirNulo(obj, "emisorNombre", "nombreEmisor", "emisor_nombre", "emisorNombreUsuario", "emisorName");
@@ -204,6 +252,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 String audioBase64 = obtenerCampoTextoPermitirNulo(obj, "audioBase64", "base64", "audio");
                 String audioMime = obtenerCampoTextoPermitirNulo(obj, "mime", "mimeType", "tipoMime");
                 Integer duracionSeg = obtenerCampoEntero(obj, "duracionSeg", "duracion", "duracionSegundos", "duracionEnSegundos");
+                
                 if (contenidoObjeto != null) {
                     boolean probableAudio = Boolean.TRUE.equals(marcaAudio)
                             || "AUDIO".equalsIgnoreCase(tipoMsg)
@@ -233,7 +282,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
                 boolean esAudio = Boolean.TRUE.equals(marcaAudio)
                         || "AUDIO".equalsIgnoreCase(tipoMsg)
-                        || (audioMime != null && audioMime.toLowerCase(Locale.ROOT).startsWith("audio"))
+                        || (audioMime != null && audioMime.toLowerCase(java.util.Locale.ROOT).startsWith("audio"))
                         || (ruta != null && !ruta.isBlank());
 
                 if (esAudio) {
@@ -259,19 +308,62 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                         if (receptor != null) privadosNotificar.add(receptor);
                     }
                 }
+            } catch (Exception e) {
+                System.err.println("Error procesando mensaje individual: " + e.getMessage());
             }
-            for (Long c : canalesNotificar) ServicioEventosMensajes.instancia().notificarCanal(c);
-            for (Long u : privadosNotificar) ServicioEventosMensajes.instancia().notificarPrivado(u);
-            System.out.println("[ObservadorEventosChat] MESSAGE_SYNC procesado. Insertados=" + insertados + ", canalesNotificar=" + canalesNotificar.size() + ", privadosNotificar=" + privadosNotificar.size());
-            exito = true;
-        } catch (SQLException e) {
-            System.out.println("[ObservadorEventosChat] Error insertando en BD (sync): " + e);
-            errorUsuario = "Error insertando mensajes sincronizados en la base de datos local.";
+        }
+        return insertados;
+    }
+
+    private void procesarEventoServidor(String json) {
+        esperarContextoDatos();
+        try {
+            String compact = json.replace('\n',' ').replace('\r',' ');
+            String payload = extraerObjetoPayload(compact);
+            if (payload == null) payload = compact;
+            
+            // Extraer el tipo de evento
+            String tipoEvento = obtenerCampoTexto(payload, "evento", "tipo", "eventType");
+            
+            if ("USER_STATUS_CHANGED".equalsIgnoreCase(tipoEvento)) {
+                procesarCambioEstadoUsuario(payload);
+            } else {
+                System.out.println("[ObservadorEventosChat] Evento no manejado: " + tipoEvento);
+            }
+            
         } catch (Exception e) {
-            System.out.println("[ObservadorEventosChat] Error procesando MESSAGE_SYNC: " + e + " json=" + SanitizadorBase64Logs.truncarCamposBase64(json));
-            errorUsuario = "Error procesando la sincronizacion de mensajes.";
-        } finally {
-            ServicioEventosMensajes.instancia().notificarSincronizacionFinalizada(insertados, total, exito, errorUsuario);
+            System.out.println("[ObservadorEventosChat] Error procesando evento del servidor: " + e);
+        }
+    }
+    
+    private void procesarCambioEstadoUsuario(String payloadJson) {
+        try {
+            Long usuarioId = obtenerCampoLong(payloadJson, "usuarioId", "userId", "id");
+            String usuarioNombre = obtenerCampoTextoPermitirNulo(payloadJson, "usuarioNombre", "usuario", "nombre", "name");
+            String usuarioEmail = obtenerCampoTextoPermitirNulo(payloadJson, "usuarioEmail", "email");
+            Boolean conectado = obtenerCampoBooleano(payloadJson, "conectado", "online", "isConnected");
+            
+            if (usuarioId != null && conectado != null) {
+                System.out.println("[ObservadorEventosChat] Cambio de estado: Usuario " + usuarioNombre + " (" + usuarioId + ") -> " + (conectado ? "CONECTADO" : "DESCONECTADO"));
+                
+                // Notificar a la capa de presentación sobre el cambio de estado
+                // Crear un objeto ClienteLocal temporal para la notificación
+                com.arquitectura.entidades.ClienteLocal usuarioTemporal = new com.arquitectura.entidades.ClienteLocal();
+                usuarioTemporal.setId(usuarioId);
+                usuarioTemporal.setNombreDeUsuario(usuarioNombre);
+                usuarioTemporal.setEmail(usuarioEmail);
+                usuarioTemporal.setEstado(conectado);
+                
+                // Extraer sesiones activas si está disponible
+                Integer sesionesActivas = obtenerCampoEntero(payloadJson, "sesionesActivas", "activeSessions");
+                String timestamp = obtenerCampoTextoPermitirNulo(payloadJson, "timestamp", "time");
+                usuarioTemporal.setSesionesActivas(sesionesActivas);
+                
+                ServicioEventosMensajes.instancia().notificarEstadoUsuarioActualizado(usuarioTemporal, sesionesActivas, timestamp);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("[ObservadorEventosChat] Error procesando cambio de estado de usuario: " + e.getMessage());
         }
     }
 

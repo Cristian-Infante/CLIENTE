@@ -37,7 +37,7 @@ public class ControladorLogin {
         try {
             if (!servicioConexion.estaConectado()) servicioConexion.conectar();
         } catch (IOException ioe) {
-            ultimoMensajeServidor = "No se pudo conectar con el servidor de chat. Verifique la IP configurada o si el servidor está disponible.";
+            ultimoMensajeServidor = "No se pudo conectar con el servidor. Verifique la IP configurada o si el servidor está disponible.";
             return false;
         } catch (Exception ex) {
             ultimoMensajeServidor = "No se pudo conectar con el servidor de chat.";

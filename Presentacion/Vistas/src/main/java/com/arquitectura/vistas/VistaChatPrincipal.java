@@ -10,6 +10,7 @@ import com.arquitectura.entidades.MensajeLocal;
 import com.arquitectura.entidades.TextoMensajeLocal;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ObservadorEventosChat;
+import com.arquitectura.servicios.SincronizacionCompletadaListener;
 import com.arquitectura.infra.net.OyenteMensajesChat;
 import com.arquitectura.servicios.OyenteActualizacionMensajes;
 import com.arquitectura.servicios.ServicioEventosMensajes;
@@ -28,21 +29,12 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Base64;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class VistaChatPrincipal extends JFrame {
     private final ClienteLocal usuarioActual;
     private final ServicioConexionChat clienteTCP;
     private volatile boolean notificadoDesconexion = false;
     private OyenteMensajesChat oyenteEventos;
-    private final Map<Long, ClienteLocal> usuariosPorId = new ConcurrentHashMap<>();
-    private OyenteActualizacionMensajes oyenteEventosGlobal;
-    private JDialog dialogoSincronizacion;
-    private JLabel lblSincronizacion;
-    private JProgressBar barraSincronizacion;
-    private JDialog avisoInicioSincronizacion;
-    private Timer temporizadorAvisoSincronizacion;
 
     // Controladores
     private final ControladorChat chatController;
@@ -84,6 +76,12 @@ public class VistaChatPrincipal extends JFrame {
     private ClienteLocal usuarioSeleccionado;
     private CanalLocal canalSeleccionado;
     private OyenteActualizacionMensajes oyenteMensajes;
+    private OyenteActualizacionMensajes oyenteSincronizacionGlobal;
+    
+    // Modal de sincronización
+    private JDialog modalSincronizacion;
+    private JLabel lblModalMensaje;
+    private JProgressBar progressBarModal;
 
     public VistaChatPrincipal(ClienteLocal usuario, ServicioConexionChat clienteTCP) {
         this.usuarioActual = usuario;
@@ -94,11 +92,16 @@ public class VistaChatPrincipal extends JFrame {
         this.audioController = new ControladorAudio(usuarioActual, clienteTCP);
 
         try { ObservadorEventosChat.instancia().registrarEn(clienteTCP); } catch (Exception ignored) {}
+        
+        // Registrar listener para notificaciones de sincronización completada
+        try { 
+            ObservadorEventosChat.instancia().setSincronizacionListener(this::mostrarCompletadoSincronizacion); 
+        } catch (Exception ignored) {}
 
         inicializarComponentes();
         configurarVentana();
         registrarOyenteEventos();
-        registrarOyenteActualizacionesGlobales();
+        registrarOyenteSincronizacionGlobal();
         SwingUtilities.invokeLater(this::refrescarSegunTabSeleccionada);
     }
 
@@ -132,40 +135,112 @@ public class VistaChatPrincipal extends JFrame {
         try { clienteTCP.registrarOyente(oyenteEventos); } catch (Exception ignored) {}
     }
 
-    private void registrarOyenteActualizacionesGlobales() {
-        if (oyenteEventosGlobal != null) {
-            try { ServicioEventosMensajes.instancia().remover(oyenteEventosGlobal); } catch (Exception ignored) {}
-        }
-        oyenteEventosGlobal = new OyenteActualizacionMensajes() {
-            @Override
-            public void onEstadoUsuarioActualizado(ClienteLocal usuario, Integer sesionesActivas, String timestampIso) {
-                if (usuario == null || usuario.getId() == null) {
-                    return;
-                }
-                ClienteLocal copia = new ClienteLocal();
-                copia.setId(usuario.getId());
-                copia.setNombreDeUsuario(usuario.getNombreDeUsuario());
-                copia.setEmail(usuario.getEmail());
-                copia.setEstado(usuario.getEstado());
-                copia.setSesionesActivas(usuario.getSesionesActivas());
-                SwingUtilities.invokeLater(() -> aplicarActualizacionEstadoUsuario(copia,
-                        sesionesActivas != null ? sesionesActivas : usuario.getSesionesActivas()));
-            }
-
+    private void registrarOyenteSincronizacionGlobal() {
+        oyenteSincronizacionGlobal = new OyenteActualizacionMensajes() {
             @Override
             public void onSincronizacionMensajesIniciada(Long totalEsperado) {
-                SwingUtilities.invokeLater(() -> {
-                    mostrarAvisoInicioSincronizacion(totalEsperado);
-                    mostrarDialogoSincronizacion(totalEsperado);
-                });
+                SwingUtilities.invokeLater(() -> mostrarModalSincronizacion("Iniciando sincronización...", totalEsperado));
             }
 
             @Override
             public void onSincronizacionMensajesFinalizada(int insertados, Long totalEsperado, boolean exito, String mensajeError) {
-                SwingUtilities.invokeLater(() -> finalizarDialogoSincronizacion(insertados, totalEsperado, exito, mensajeError));
+                SwingUtilities.invokeLater(() -> {
+                    mostrarCompletadoSincronizacion(insertados, exito, mensajeError);
+                });
             }
         };
-        ServicioEventosMensajes.instancia().registrar(oyenteEventosGlobal);
+        ServicioEventosMensajes.instancia().registrar(oyenteSincronizacionGlobal);
+    }
+
+    private void mostrarModalSincronizacion(String mensaje, Long totalEsperado) {
+        if (modalSincronizacion != null) {
+            modalSincronizacion.dispose();
+        }
+        
+        modalSincronizacion = new JDialog(this, "Sincronización", true);
+        modalSincronizacion.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        modalSincronizacion.setSize(450, 180);
+        modalSincronizacion.setLocationRelativeTo(this);
+        modalSincronizacion.setResizable(false);
+        
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        
+        lblModalMensaje = new JLabel(mensaje);
+        lblModalMensaje.setHorizontalAlignment(SwingConstants.CENTER);
+        lblModalMensaje.setFont(lblModalMensaje.getFont().deriveFont(Font.BOLD, 14f));
+        
+        progressBarModal = new JProgressBar();
+        progressBarModal.setIndeterminate(true);
+        progressBarModal.setStringPainted(true);
+        
+        if (totalEsperado != null && totalEsperado > 0) {
+            progressBarModal.setString("Sincronizando " + totalEsperado + " mensajes...");
+        } else {
+            progressBarModal.setString("Sincronizando mensajes...");
+        }
+        
+        panel.add(lblModalMensaje, BorderLayout.CENTER);
+        panel.add(progressBarModal, BorderLayout.SOUTH);
+        
+        modalSincronizacion.add(panel);
+        modalSincronizacion.setVisible(true);
+    }
+
+    private void ocultarModalSincronizacion() {
+        if (modalSincronizacion != null) {
+            modalSincronizacion.dispose();
+            modalSincronizacion = null;
+            lblModalMensaje = null;
+            progressBarModal = null;
+        }
+    }
+
+    public void mostrarModalSincronizacionInicial(Long totalEsperado) {
+        SwingUtilities.invokeLater(() -> {
+            mostrarModalSincronizacion("Sincronizando mensajes del servidor...", totalEsperado);
+            // Programar el cierre automático después de un tiempo razonable si no se cierra por evento
+            javax.swing.Timer timer = new javax.swing.Timer(15000, e -> ocultarModalSincronizacion()); // 15 segundos max
+            timer.setRepeats(false);
+            timer.start();
+        });
+    }
+
+    private void mostrarCompletadoSincronizacion(int insertados, boolean exito, String mensajeError) {
+        if (modalSincronizacion != null && lblModalMensaje != null && progressBarModal != null) {
+            if (exito) {
+                lblModalMensaje.setText("¡Sincronización completada!");
+                lblModalMensaje.setForeground(new Color(0, 150, 0)); // Verde
+                progressBarModal.setIndeterminate(false);
+                progressBarModal.setValue(100);
+                progressBarModal.setString("✓ " + insertados + " mensajes sincronizados");
+                
+                // Cerrar el modal después de 2 segundos para que el usuario vea el mensaje
+                javax.swing.Timer closeTimer = new javax.swing.Timer(2000, e -> {
+                    ocultarModalSincronizacion();
+                    // Refrescar la vista actual si hay una conversación seleccionada
+                    refrescarMensajesActuales();
+                });
+                closeTimer.setRepeats(false);
+                closeTimer.start();
+            } else {
+                lblModalMensaje.setText("Error en la sincronización");
+                lblModalMensaje.setForeground(Color.RED);
+                progressBarModal.setIndeterminate(false);
+                progressBarModal.setValue(0);
+                progressBarModal.setString("✗ " + (mensajeError != null ? mensajeError : "Error desconocido"));
+                
+                // Cerrar después de 3 segundos para que vean el error
+                javax.swing.Timer closeTimer = new javax.swing.Timer(3000, e -> ocultarModalSincronizacion());
+                closeTimer.setRepeats(false);
+                closeTimer.start();
+            }
+        } else {
+            // Si no hay modal visible, solo refrescar
+            if (exito) {
+                refrescarMensajesActuales();
+            }
+        }
     }
 
     private static String extraerCampo(String jsonLinea, String campo) {
@@ -322,17 +397,31 @@ public class VistaChatPrincipal extends JFrame {
             if (!clienteTCP.estaConectado()) clienteTCP.conectar();
             com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(clienteTCP);
             java.util.List<ClienteLocal> usuarios = comandos.listarUsuariosYEsperar(6000);
-            usuariosPorId.clear();
+            modeloUsuarios.clear();
             if (usuarios != null) {
+                usuarios = new java.util.ArrayList<>(usuarios);
+                usuarios.sort((a, b) -> {
+                    boolean aCon = Boolean.TRUE.equals(a.getEstado());
+                    boolean bCon = Boolean.TRUE.equals(b.getEstado());
+                    if (aCon == bCon) {
+                        String na = a.getNombreDeUsuario() != null ? a.getNombreDeUsuario() : "";
+                        String nb = b.getNombreDeUsuario() != null ? b.getNombreDeUsuario() : "";
+                        return na.compareToIgnoreCase(nb);
+                    }
+                    return aCon ? -1 : 1;
+                });
+                // Excluir al usuario actual
+                Long miId = usuarioActual != null ? usuarioActual.getId() : null;
+                String miUser = usuarioActual != null ? usuarioActual.getNombreDeUsuario() : null;
+                String miNorm = miUser != null ? miUser.trim().toLowerCase() : null;
                 for (ClienteLocal u : usuarios) {
-                    if (u == null || u.getId() == null) continue;
-                    usuariosPorId.put(u.getId(), u);
+                    if (u == null) continue;
+                    if (miId != null && miId.equals(u.getId())) continue;
+                    String uNorm = u.getNombreDeUsuario() != null ? u.getNombreDeUsuario().trim().toLowerCase() : null;
+                    if (miNorm != null && miNorm.equals(uNorm)) continue;
+                    modeloUsuarios.addElement(u);
                 }
             }
-            if (usuarioActual != null && usuarioActual.getId() != null) {
-                usuariosPorId.remove(usuarioActual.getId());
-            }
-            reconstruirListaUsuarios();
         } catch (Exception ignored) {
             // No-op
         }
@@ -342,234 +431,6 @@ public class VistaChatPrincipal extends JFrame {
         java.util.List<CanalLocal> mis = canalController.obtenerMisCanales();
         modeloCanales.clear();
         if (mis != null) for (CanalLocal c : mis) if (c != null) modeloCanales.addElement(c);
-    }
-
-    private void reconstruirListaUsuarios() {
-        if (modeloUsuarios == null || listaUsuarios == null) {
-            return;
-        }
-        java.util.List<ClienteLocal> usuarios = new java.util.ArrayList<>(usuariosPorId.values());
-        usuarios.sort((a, b) -> {
-            boolean aCon = Boolean.TRUE.equals(a.getEstado());
-            boolean bCon = Boolean.TRUE.equals(b.getEstado());
-            if (aCon != bCon) {
-                return aCon ? -1 : 1;
-            }
-            String na = a.getNombreDeUsuario() != null ? a.getNombreDeUsuario() : "";
-            String nb = b.getNombreDeUsuario() != null ? b.getNombreDeUsuario() : "";
-            int cmp = na.compareToIgnoreCase(nb);
-            if (cmp != 0) return cmp;
-            Long ida = a.getId();
-            Long idb = b.getId();
-            if (ida != null && idb != null) return ida.compareTo(idb);
-            return 0;
-        });
-        Long seleccionadoId = usuarioSeleccionado != null ? usuarioSeleccionado.getId() : null;
-        modeloUsuarios.clear();
-        for (ClienteLocal u : usuarios) {
-            if (esUsuarioActual(u)) {
-                continue;
-            }
-            modeloUsuarios.addElement(u);
-        }
-        if (seleccionadoId != null) {
-            for (int i = 0; i < modeloUsuarios.size(); i++) {
-                ClienteLocal u = modeloUsuarios.getElementAt(i);
-                if (seleccionadoId.equals(u.getId())) {
-                    listaUsuarios.setSelectedIndex(i);
-                    usuarioSeleccionado = u;
-                    mostrarInfoUsuario();
-                    break;
-                }
-            }
-        }
-        listaUsuarios.repaint();
-    }
-
-    private boolean esUsuarioActual(ClienteLocal usuario) {
-        if (usuario == null) {
-            return false;
-        }
-        Long miId = usuarioActual != null ? usuarioActual.getId() : null;
-        if (miId != null && miId.equals(usuario.getId())) {
-            return true;
-        }
-        String miNombre = usuarioActual != null ? usuarioActual.getNombreDeUsuario() : null;
-        String otroNombre = usuario.getNombreDeUsuario();
-        if (miNombre != null && otroNombre != null) {
-            return miNombre.trim().equalsIgnoreCase(otroNombre.trim());
-        }
-        return false;
-    }
-
-    private void aplicarActualizacionEstadoUsuario(ClienteLocal usuarioActualizado, Integer sesionesActivas) {
-        if (usuarioActualizado == null || usuarioActualizado.getId() == null) {
-            return;
-        }
-        Long id = usuarioActualizado.getId();
-        if (usuarioActual != null && id.equals(usuarioActual.getId())) {
-            usuarioActual.setEstado(usuarioActualizado.getEstado());
-            usuarioActual.setSesionesActivas(sesionesActivas != null ? sesionesActivas : usuarioActualizado.getSesionesActivas());
-            actualizarEtiquetaEstadoConexion(usuarioActual.getEstado());
-            return;
-        }
-        ClienteLocal existente = usuariosPorId.get(id);
-        if (existente == null) {
-            existente = new ClienteLocal();
-            existente.setId(id);
-            usuariosPorId.put(id, existente);
-        }
-        if (usuarioActualizado.getNombreDeUsuario() != null && !usuarioActualizado.getNombreDeUsuario().isBlank()) {
-            existente.setNombreDeUsuario(usuarioActualizado.getNombreDeUsuario());
-        }
-        if (usuarioActualizado.getEmail() != null && !usuarioActualizado.getEmail().isBlank()) {
-            existente.setEmail(usuarioActualizado.getEmail());
-        }
-        existente.setEstado(usuarioActualizado.getEstado());
-        if (sesionesActivas != null) {
-            existente.setSesionesActivas(sesionesActivas);
-        } else {
-            existente.setSesionesActivas(usuarioActualizado.getSesionesActivas());
-        }
-        reconstruirListaUsuarios();
-        if (usuarioSeleccionado != null && usuarioSeleccionado.getId() != null && usuarioSeleccionado.getId().equals(id)) {
-            usuarioSeleccionado = existente;
-            mostrarInfoUsuario();
-        }
-        actualizarEstadoEnCanalSeleccionado(id, existente.getEstado(), existente.getSesionesActivas());
-    }
-
-    private void actualizarEstadoEnCanalSeleccionado(Long usuarioId, Boolean estado, Integer sesionesActivas) {
-        if (canalSeleccionado == null || usuarioId == null) {
-            return;
-        }
-        java.util.List<ClienteLocal> miembros = canalSeleccionado.getMiembros();
-        if (miembros == null || miembros.isEmpty()) {
-            return;
-        }
-        boolean actualizado = false;
-        for (ClienteLocal miembro : miembros) {
-            if (miembro != null && usuarioId.equals(miembro.getId())) {
-                miembro.setEstado(estado);
-                if (sesionesActivas != null) {
-                    miembro.setSesionesActivas(sesionesActivas);
-                }
-                actualizado = true;
-            }
-        }
-        if (actualizado) {
-            mostrarInfoCanal();
-        }
-    }
-
-    private void actualizarEtiquetaEstadoConexion(Boolean conectado) {
-        if (lblEstadoConexion == null) {
-            return;
-        }
-        if (Boolean.TRUE.equals(conectado)) {
-            lblEstadoConexion.setText("Conectado");
-            lblEstadoConexion.setForeground(new Color(0, 128, 0));
-        } else if (Boolean.FALSE.equals(conectado)) {
-            lblEstadoConexion.setText("Desconectado");
-            lblEstadoConexion.setForeground(new Color(178, 34, 34));
-        } else {
-            lblEstadoConexion.setText("Estado desconocido");
-            lblEstadoConexion.setForeground(Color.DARK_GRAY);
-        }
-    }
-
-    private void mostrarDialogoSincronizacion(Long totalEsperado) {
-        if (dialogoSincronizacion == null) {
-            dialogoSincronizacion = new JDialog(this, "Sincronizando mensajes", Dialog.ModalityType.MODELESS);
-            dialogoSincronizacion.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-            dialogoSincronizacion.setResizable(false);
-            JPanel contenido = new JPanel(new BorderLayout(10, 10));
-            contenido.setBorder(new EmptyBorder(12, 16, 12, 16));
-            lblSincronizacion = new JLabel("Sincronizando mensajes...");
-            barraSincronizacion = new JProgressBar();
-            barraSincronizacion.setIndeterminate(true);
-            contenido.add(lblSincronizacion, BorderLayout.NORTH);
-            contenido.add(barraSincronizacion, BorderLayout.CENTER);
-            dialogoSincronizacion.getContentPane().add(contenido);
-            dialogoSincronizacion.pack();
-        }
-        if (lblSincronizacion != null) {
-            if (totalEsperado != null && totalEsperado > 0) {
-                lblSincronizacion.setText("Sincronizando mensajes (" + totalEsperado + ")...");
-            } else {
-                lblSincronizacion.setText("Sincronizando mensajes...");
-            }
-        }
-        if (barraSincronizacion != null) {
-            barraSincronizacion.setIndeterminate(true);
-        }
-        if (dialogoSincronizacion != null && !dialogoSincronizacion.isVisible()) {
-            dialogoSincronizacion.setLocationRelativeTo(this);
-            dialogoSincronizacion.setVisible(true);
-        }
-    }
-
-    private void mostrarAvisoInicioSincronizacion(Long totalEsperado) {
-        ocultarAvisoInicioSincronizacion();
-        if (!isDisplayable()) {
-            return;
-        }
-        String detalle = (totalEsperado != null && totalEsperado > 0)
-                ? "Sincronización iniciada: " + totalEsperado + (totalEsperado == 1 ? " mensaje" : " mensajes") + "."
-                : "Sincronización de mensajes iniciada.";
-        JOptionPane pane = new JOptionPane(detalle, JOptionPane.INFORMATION_MESSAGE);
-        avisoInicioSincronizacion = pane.createDialog(this, "Sincronización iniciada");
-        avisoInicioSincronizacion.setModal(false);
-        avisoInicioSincronizacion.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        avisoInicioSincronizacion.setAlwaysOnTop(true);
-        avisoInicioSincronizacion.setLocationRelativeTo(this);
-        avisoInicioSincronizacion.setVisible(true);
-        if (temporizadorAvisoSincronizacion != null) {
-            temporizadorAvisoSincronizacion.stop();
-        }
-        temporizadorAvisoSincronizacion = new Timer(2500, e -> ocultarAvisoInicioSincronizacion());
-        temporizadorAvisoSincronizacion.setRepeats(false);
-        temporizadorAvisoSincronizacion.start();
-    }
-
-    private void ocultarAvisoInicioSincronizacion() {
-        if (temporizadorAvisoSincronizacion != null) {
-            temporizadorAvisoSincronizacion.stop();
-            temporizadorAvisoSincronizacion = null;
-        }
-        if (avisoInicioSincronizacion != null) {
-            try {
-                avisoInicioSincronizacion.setVisible(false);
-            } catch (Exception ignored) {}
-            try {
-                avisoInicioSincronizacion.dispose();
-            } catch (Exception ignored) {}
-            avisoInicioSincronizacion = null;
-        }
-    }
-
-    private void finalizarDialogoSincronizacion(int insertados, Long totalEsperado, boolean exito, String mensajeError) {
-        ocultarAvisoInicioSincronizacion();
-        if (dialogoSincronizacion != null) {
-            dialogoSincronizacion.setVisible(false);
-        }
-        if (!isDisplayable()) {
-            return;
-        }
-        if (exito) {
-            StringBuilder msg = new StringBuilder("Sincronización completada.");
-            if (insertados > 0) {
-                msg.append(" Se incorporaron ").append(insertados).append(insertados == 1 ? " mensaje." : " mensajes.");
-            } else {
-                msg.append(" No hubo mensajes nuevos.");
-            }
-            JOptionPane.showMessageDialog(this, msg.toString(), "Sincronización completada", JOptionPane.INFORMATION_MESSAGE);
-        } else {
-            String detalle = (mensajeError != null && !mensajeError.isBlank())
-                    ? mensajeError
-                    : "Ocurrió un problema al sincronizar los mensajes.";
-            JOptionPane.showMessageDialog(this, detalle, "Sincronización incompleta", JOptionPane.WARNING_MESSAGE);
-        }
     }
 
     private JPanel crearPanelCentral() {
@@ -587,7 +448,12 @@ public class VistaChatPrincipal extends JFrame {
         contenedorMensajes.setBackground(Color.WHITE);
         contenedorMensajes.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        scrollMensajes = new JScrollPane(contenedorMensajes);
+        // Crear un panel wrapper que no se estire verticalmente
+        JPanel wrapperMensajes = new JPanel(new BorderLayout());
+        wrapperMensajes.setBackground(Color.WHITE);
+        wrapperMensajes.add(contenedorMensajes, BorderLayout.NORTH);
+
+        scrollMensajes = new JScrollPane(wrapperMensajes);
         scrollMensajes.getVerticalScrollBar().setUnitIncrement(16);
         scrollMensajes.getViewport().setBackground(Color.WHITE);
 
@@ -700,6 +566,22 @@ public class VistaChatPrincipal extends JFrame {
                     mostrarMensajes(hist);
                 });
             }
+            
+            @Override public void onEstadoUsuarioActualizado(ClienteLocal usuario, Integer sesionesActivas, String timestampIso) {
+                try { 
+                    System.out.println("[VistaChatPrincipal] onEstadoUsuarioActualizado usuario=" + 
+                        (usuario == null ? "null" : usuario.getNombreDeUsuario()) + " sesiones=" + sesionesActivas); 
+                } catch (Exception ignored) {}
+                
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    try {
+                        // Actualizar la lista de usuarios para reflejar el cambio de estado
+                        cargarUsuariosDisponibles();
+                    } catch (Exception e) {
+                        System.err.println("Error actualizando lista de usuarios: " + e.getMessage());
+                    }
+                });
+            }
         };
         // prefer the simple registrar; logging already done in ServicioEventosMensajes.notificar* calls
         ServicioEventosMensajes.instancia().registrar(oyenteMensajes);
@@ -782,10 +664,6 @@ public class VistaChatPrincipal extends JFrame {
         info.append("Nombre: ").append(usuarioSeleccionado.getNombreDeUsuario()).append("\n");
         info.append("Email: ").append(usuarioSeleccionado.getEmail() == null ? "-" : usuarioSeleccionado.getEmail()).append("\n");
         info.append("Estado: ").append(Boolean.TRUE.equals(usuarioSeleccionado.getEstado()) ? "Conectado" : "Desconectado").append("\n");
-        Integer sesiones = usuarioSeleccionado.getSesionesActivas();
-        if (sesiones != null) {
-            info.append("Sesiones activas: ").append(sesiones).append("\n");
-        }
         areaInfo.setText(info.toString());
     }
 
@@ -822,14 +700,8 @@ public class VistaChatPrincipal extends JFrame {
                     nombre = miembro.getId() != null ? ("#" + miembro.getId()) : "Desconocido";
                 }
                 info.append(" - ").append(nombre);
-                if (miembro.getEmail() != null && (miembro.getNombreDeUsuario() == null || !miembro.getNombreDeUsuario().equalsIgnoreCase(miembro.getEmail()))) {
-                    info.append(" <").append(miembro.getEmail()).append('>');
-                }
                 if (miembro.getEstado() != null) {
                     info.append(" - ").append(Boolean.TRUE.equals(miembro.getEstado()) ? "Conectado" : "Desconectado");
-                }
-                if (miembro.getSesionesActivas() != null) {
-                    info.append(" (sesiones: ").append(miembro.getSesionesActivas()).append(')');
                 }
                 info.append('\n');
             }
@@ -944,11 +816,11 @@ public class VistaChatPrincipal extends JFrame {
                     if (oyenteMensajes != null) ServicioEventosMensajes.instancia().remover(oyenteMensajes);
                 } catch (Exception ignored) {}
                 try {
-                    if (oyenteEventosGlobal != null) ServicioEventosMensajes.instancia().remover(oyenteEventosGlobal);
+                    if (oyenteSincronizacionGlobal != null) ServicioEventosMensajes.instancia().remover(oyenteSincronizacionGlobal);
                 } catch (Exception ignored) {}
                 oyenteEventos = null;
                 oyenteMensajes = null;
-                oyenteEventosGlobal = null;
+                oyenteSincronizacionGlobal = null;
                 if (!clienteTCP.estaConectado()) {
                     try { clienteTCP.conectar(); } catch (Exception ignored) {}
                 }
@@ -971,7 +843,8 @@ public class VistaChatPrincipal extends JFrame {
             @Override public void windowClosing(java.awt.event.WindowEvent e) {
                 try { if (oyenteEventos != null) clienteTCP.removerOyente(oyenteEventos); } catch (Exception ignored) {}
                 try { if (oyenteMensajes != null) ServicioEventosMensajes.instancia().remover(oyenteMensajes); } catch (Exception ignored) {}
-                try { if (oyenteEventosGlobal != null) ServicioEventosMensajes.instancia().remover(oyenteEventosGlobal); } catch (Exception ignored) {}
+                try { if (oyenteSincronizacionGlobal != null) ServicioEventosMensajes.instancia().remover(oyenteSincronizacionGlobal); } catch (Exception ignored) {}
+                ocultarModalSincronizacion();
             }
         });
     }
@@ -1008,11 +881,9 @@ public class VistaChatPrincipal extends JFrame {
         if (hora.length() > 5) hora = hora.substring(0, 5);
         String nombre = obtenerNombreEmisor(mensaje);
 
-        JPanel fila = new JPanel(new GridBagLayout());
+        JPanel fila = new JPanel(new BorderLayout());
         fila.setOpaque(false);
         fila.setBorder(new EmptyBorder(0, 5, 0, 5));
-        fila.setAlignmentX(Component.LEFT_ALIGNMENT);
-        fila.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         JPanel burbuja = new JPanel();
         burbuja.setLayout(new BoxLayout(burbuja, BoxLayout.Y_AXIS));
@@ -1023,8 +894,11 @@ public class VistaChatPrincipal extends JFrame {
                 new EmptyBorder(8, 12, 8, 12)
         ));
         burbuja.setAlignmentX(Component.LEFT_ALIGNMENT);
-        burbuja.setAlignmentY(Component.TOP_ALIGNMENT);
-        burbuja.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        // Calcular ancho dinámicamente basado en el contenedor
+        int anchoDisponible = contenedorMensajes.getWidth() - 40; // Restar padding
+        if (anchoDisponible < 300) anchoDisponible = 800; // Fallback si no se ha renderizado aún
+        int anchoMaximo = Math.max(300, (int)(anchoDisponible * 0.85)); // 85% del ancho disponible
+        burbuja.setMaximumSize(new Dimension(anchoMaximo, Integer.MAX_VALUE));
 
         JLabel lblEncabezado = new JLabel("[" + hora + "] " + nombre);
         lblEncabezado.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1050,13 +924,7 @@ public class VistaChatPrincipal extends JFrame {
             burbuja.add(crearTextoMultilinea("Tipo " + (mensaje.getTipo() != null ? mensaje.getTipo() : "desconocido")));
         }
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.anchor = GridBagConstraints.WEST;
-        fila.add(burbuja, gbc);
+        fila.add(burbuja, BorderLayout.WEST);
 
         return fila;
     }
@@ -1077,9 +945,14 @@ public class VistaChatPrincipal extends JFrame {
         area.setOpaque(false);
         area.setBorder(null);
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
-        area.setAlignmentY(Component.TOP_ALIGNMENT);
-        area.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
         area.setFont(area.getFont().deriveFont(13f));
+        
+        // Optimizar el ancho para evitar saltos de línea innecesarios
+        int anchoDisponible = contenedorMensajes.getWidth() - 80; // Restar márgenes y padding
+        if (anchoDisponible < 200) anchoDisponible = 700; // Fallback
+        int anchoPreferido = Math.max(200, (int)(anchoDisponible * 0.8));
+        area.setSize(new Dimension(anchoPreferido, Integer.MAX_VALUE));
+        
         return area;
     }
 
