@@ -33,6 +33,12 @@
             <artifactId>Comunicacion</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
+        <!-- ConfigClienteDB para ProveedorConexionCliente -->
+        <dependency>
+            <groupId>com.arquitectura.config</groupId>
+            <artifactId>ConfigClienteDB</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
 </project>
