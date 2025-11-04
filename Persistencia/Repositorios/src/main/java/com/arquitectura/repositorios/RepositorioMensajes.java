@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.Objects;
 
 import com.arquitectura.config.ProveedorConexionCliente;
 
@@ -263,7 +264,16 @@ public class RepositorioMensajes {
         if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, false, contenido, null, null, null, null)) {
             return 0L;
         }
-        if (existePorServerId(serverId)) return 0L;
+
+        MensajeExistente existente = obtenerMensajePorServerId(serverId);
+        if (existente != null) {
+            if (coincideMensajeTexto(existente, serverTs, emisorId, receptorId, canalId, contenido)) {
+                return 0L;
+            }
+            logServerIdReutilizado(serverId, existente, emisorId, receptorId, canalId, false, serverTs);
+            serverId = null;
+        }
+
         if (existePorCampos(emisorId, receptorId, canalId, false, contenido, null, serverTs)) return 0L;
         String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, server_id, server_ts, contexto_usuario_id) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, NULL, ?, ?, ?)";
@@ -290,7 +300,16 @@ public class RepositorioMensajes {
         if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, true, transcripcion, rutaArchivo, audioBase64, mime, duracionSeg)) {
             return 0L;
         }
-        if (existePorServerId(serverId)) return 0L;
+
+        MensajeExistente existente = obtenerMensajePorServerId(serverId);
+        if (existente != null) {
+            if (coincideMensajeAudio(existente, serverTs, emisorId, receptorId, canalId, rutaArchivo)) {
+                return 0L;
+            }
+            logServerIdReutilizado(serverId, existente, emisorId, receptorId, canalId, true, serverTs);
+            serverId = null;
+        }
+
         if (existePorCampos(emisorId, receptorId, canalId, true, null, rutaArchivo, serverTs)) return 0L;
         String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg, server_id, server_ts, contexto_usuario_id) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -441,6 +460,94 @@ public class RepositorioMensajes {
         }
     }
 
+    private MensajeExistente obtenerMensajePorServerId(Long serverId) throws SQLException {
+        if (serverId == null) return null;
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion()) {
+            return obtenerMensajePorServerId(cn, serverId);
+        }
+    }
+
+    private MensajeExistente obtenerMensajePorServerId(Connection cn, Long serverId) throws SQLException {
+        if (serverId == null) return null;
+        String sql = "SELECT emisor_id, receptor_id, canal_id, es_audio, texto, ruta_audio, server_ts FROM mensajes WHERE contexto_usuario_id = ? AND server_id = ? LIMIT 1";
+        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setLong(1, contextoActual());
+            ps.setLong(2, serverId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Long emisor = rs.getLong("emisor_id");
+                    if (rs.wasNull()) emisor = null;
+                    Long receptor = rs.getLong("receptor_id");
+                    if (rs.wasNull()) receptor = null;
+                    Long canal = rs.getLong("canal_id");
+                    if (rs.wasNull()) canal = null;
+                    boolean esAudio = rs.getBoolean("es_audio");
+                    String texto = rs.getString("texto");
+                    String ruta = rs.getString("ruta_audio");
+                    java.sql.Timestamp ts = rs.getTimestamp("server_ts");
+                    return new MensajeExistente(emisor, receptor, canal, esAudio, texto, ruta, ts);
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean coincideMensajeTexto(MensajeExistente existente, java.sql.Timestamp serverTs, Long emisorId, Long receptorId, Long canalId, String contenido) {
+        if (existente == null || existente.esAudio) return false;
+        return Objects.equals(normalizarId(existente.emisorId), normalizarId(emisorId))
+                && Objects.equals(normalizarId(existente.receptorId), normalizarId(receptorId))
+                && Objects.equals(existente.canalId, canalId)
+                && Objects.equals(valorTextoSeguro(existente.texto), valorTextoSeguro(contenido))
+                && Objects.equals(existente.serverTs, serverTs);
+    }
+
+    private boolean coincideMensajeAudio(MensajeExistente existente, java.sql.Timestamp serverTs, Long emisorId, Long receptorId, Long canalId, String rutaArchivo) {
+        if (existente == null || !existente.esAudio) return false;
+        return Objects.equals(normalizarId(existente.emisorId), normalizarId(emisorId))
+                && Objects.equals(normalizarId(existente.receptorId), normalizarId(receptorId))
+                && Objects.equals(existente.canalId, canalId)
+                && Objects.equals(normalizarRuta(existente.rutaAudio), normalizarRuta(rutaArchivo))
+                && Objects.equals(existente.serverTs, serverTs);
+    }
+
+    private void logServerIdReutilizado(Long serverId, MensajeExistente existente, Long nuevoEmisor, Long nuevoReceptor, Long nuevoCanal, boolean esAudio, java.sql.Timestamp nuevoServerTs) {
+        if (serverId == null || existente == null) return;
+        try {
+            System.out.println("[RepositorioMensajes] Advertencia: server_id=" + serverId + " reutilizado para " + (esAudio ? "audio" : "texto") +
+                    ". Se almacenará localmente sin server_id. existente(emisor=" + normalizarId(existente.emisorId) +
+                    ", receptor=" + normalizarId(existente.receptorId) + ", canal=" + existente.canalId + ", ts=" + existente.serverTs +
+                    ") nuevo(emisor=" + normalizarId(nuevoEmisor) + ", receptor=" + normalizarId(nuevoReceptor) + ", canal=" + nuevoCanal + ", ts=" + nuevoServerTs + ")");
+        } catch (Exception ignored) {}
+    }
+
+    private Long normalizarId(Long id) {
+        return id != null ? id : 0L;
+    }
+
+    private String valorTextoSeguro(String texto) {
+        return texto != null ? texto : "";
+    }
+
+    private static class MensajeExistente {
+        final Long emisorId;
+        final Long receptorId;
+        final Long canalId;
+        final boolean esAudio;
+        final String texto;
+        final String rutaAudio;
+        final java.sql.Timestamp serverTs;
+
+        MensajeExistente(Long emisorId, Long receptorId, Long canalId, boolean esAudio, String texto, String rutaAudio, java.sql.Timestamp serverTs) {
+            this.emisorId = emisorId;
+            this.receptorId = receptorId;
+            this.canalId = canalId;
+            this.esAudio = esAudio;
+            this.texto = texto;
+            this.rutaAudio = rutaAudio;
+            this.serverTs = serverTs;
+        }
+    }
+
     private String normalizarRuta(String ruta) {
         if (ruta == null) return null;
         String limpia = ruta.trim();
@@ -459,15 +566,7 @@ public class RepositorioMensajes {
      * Verifica si ya existe un mensaje con el serverId dado usando una consulta optimizada
      */
     private boolean existeServerId(Connection cn, Long serverId) throws SQLException {
-        if (serverId == null) return false;
-        try (PreparedStatement ps = cn.prepareStatement(
-                "SELECT 1 FROM mensajes WHERE server_id = ? AND contexto_usuario_id = ? LIMIT 1")) {
-            ps.setLong(1, serverId);
-            ps.setLong(2, contextoActual());
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        }
+        return obtenerMensajePorServerId(cn, serverId) != null;
     }
 
     /**
@@ -496,9 +595,6 @@ public class RepositorioMensajes {
                     try {
                         // Extraer campos básicos usando métodos simplificados
                         Long serverId = extraerLongSimple(objJson, "serverId", "mensajeId", "messageId", "id");
-                        if (serverId != null && existeServerId(cn, serverId)) {
-                            continue; // Saltar mensajes duplicados
-                        }
 
                         String tipoMsg = extraerTextoSimple(objJson, "tipo", "tipoMensaje");
                         Long emisor = extraerLongSimple(objJson, "emisor", "emisorId");
@@ -523,8 +619,41 @@ public class RepositorioMensajes {
                             }
                         }
 
+                        MensajeExistente existente = obtenerMensajePorServerId(cn, serverId);
+                        String contenidoTexto = null;
+                        String rutaAudio = null;
+                        boolean esAudioMensaje = Boolean.TRUE.equals(esAudio);
+                        if (!esAudioMensaje) {
+                            String contenidoObjPrev = extraerObjetoContenido(objJson);
+                            if (contenidoObjPrev != null) {
+                                contenidoTexto = extraerTextoSimple(contenidoObjPrev, "contenido", "texto", "mensaje");
+                            }
+                            if (contenidoTexto == null) {
+                                contenidoTexto = extraerTextoSimple(objJson, "contenido", "texto", "mensaje");
+                            }
+                        } else {
+                            String contenidoObjPrev = extraerObjetoContenido(objJson);
+                            if (contenidoObjPrev != null) {
+                                rutaAudio = extraerTextoSimple(contenidoObjPrev, "rutaArchivo", "ruta", "rutaAudio");
+                            }
+                            if (rutaAudio == null) {
+                                rutaAudio = extraerTextoSimple(objJson, "rutaArchivo", "ruta", "rutaAudio");
+                            }
+                        }
+
+                        if (existente != null) {
+                            boolean coincide = esAudioMensaje
+                                    ? coincideMensajeAudio(existente, serverTs, emisor, receptor, canalId, rutaAudio)
+                                    : coincideMensajeTexto(existente, serverTs, emisor, receptor, canalId, contenidoTexto);
+                            if (coincide) {
+                                continue;
+                            }
+                            logServerIdReutilizado(serverId, existente, emisor, receptor, canalId, esAudioMensaje, serverTs);
+                            serverId = null;
+                        }
+
                         // Decidir si es audio o texto
-                        if (Boolean.TRUE.equals(esAudio)) {
+                        if (esAudioMensaje) {
                             // Mensaje de audio - extraer desde objeto contenido
                             String contenidoObj = extraerObjetoContenido(objJson);
                             String transcripcion = null;
@@ -564,19 +693,6 @@ public class RepositorioMensajes {
                             psAudio.addBatch();
                         } else {
                             // Mensaje de texto - extraer desde objeto contenido
-                            String contenido = null;
-                            String contenidoObj = extraerObjetoContenido(objJson);
-                            
-                            if (contenidoObj != null) {
-                                // Buscar contenido dentro del objeto contenido
-                                contenido = extraerTextoSimple(contenidoObj, "contenido", "texto", "mensaje");
-                            }
-                            
-                            // Fallback: buscar directamente en el JSON raíz
-                            if (contenido == null) {
-                                contenido = extraerTextoSimple(objJson, "contenido", "texto", "mensaje");
-                            }
-
                             // Agregar al batch de texto
                             int idx = 1;
                             if (serverId != null) psTexto.setLong(idx++, serverId); else psTexto.setNull(idx++, Types.BIGINT);
@@ -587,7 +703,7 @@ public class RepositorioMensajes {
                             if (receptor != null) psTexto.setLong(idx++, receptor); else psTexto.setNull(idx++, Types.BIGINT);
                             if (receptorNombre != null) psTexto.setString(idx++, receptorNombre); else psTexto.setNull(idx++, Types.VARCHAR);
                             if (canalId != null) psTexto.setLong(idx++, canalId); else psTexto.setNull(idx++, Types.BIGINT);
-                            if (contenido != null) psTexto.setString(idx++, contenido); else psTexto.setNull(idx++, Types.CLOB);
+                            if (contenidoTexto != null) psTexto.setString(idx++, contenidoTexto); else psTexto.setNull(idx++, Types.CLOB);
                             psTexto.setLong(idx++, contexto);
                             psTexto.addBatch();
                         }
