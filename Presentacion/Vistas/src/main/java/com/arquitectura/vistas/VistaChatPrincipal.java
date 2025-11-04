@@ -93,10 +93,7 @@ public class VistaChatPrincipal extends JFrame {
 
         try { ObservadorEventosChat.instancia().registrarEn(clienteTCP); } catch (Exception ignored) {}
         
-        // Registrar listener para notificaciones de sincronización completada
-        try { 
-            ObservadorEventosChat.instancia().setSincronizacionListener(this::mostrarCompletadoSincronizacion); 
-        } catch (Exception ignored) {}
+        // Listener de sincronización removido para simplificar la interfaz
 
         inicializarComponentes();
         configurarVentana();
@@ -139,13 +136,20 @@ public class VistaChatPrincipal extends JFrame {
         oyenteSincronizacionGlobal = new OyenteActualizacionMensajes() {
             @Override
             public void onSincronizacionMensajesIniciada(Long totalEsperado) {
-                SwingUtilities.invokeLater(() -> mostrarModalSincronizacion("Iniciando sincronización...", totalEsperado));
+                // Modal de sincronización removido para evitar problemas de timing
+                System.out.println("[VistaChatPrincipal] Sincronización iniciada: " + totalEsperado + " mensajes esperados");
             }
 
             @Override
             public void onSincronizacionMensajesFinalizada(int insertados, Long totalEsperado, boolean exito, String mensajeError) {
+                // Simplificado: solo ocultar modal si existe y refrescar mensajes si fue exitoso
                 SwingUtilities.invokeLater(() -> {
-                    mostrarCompletadoSincronizacion(insertados, exito, mensajeError);
+                    if (modalSincronizacion != null) {
+                        ocultarModalSincronizacion();
+                    }
+                    if (exito && insertados > 0) {
+                        refrescarMensajesActuales();
+                    }
                 });
             }
         };
@@ -197,51 +201,11 @@ public class VistaChatPrincipal extends JFrame {
     }
 
     public void mostrarModalSincronizacionInicial(Long totalEsperado) {
-        SwingUtilities.invokeLater(() -> {
-            mostrarModalSincronizacion("Sincronizando mensajes del servidor...", totalEsperado);
-            // Programar el cierre automático después de un tiempo razonable si no se cierra por evento
-            javax.swing.Timer timer = new javax.swing.Timer(15000, e -> ocultarModalSincronizacion()); // 15 segundos max
-            timer.setRepeats(false);
-            timer.start();
-        });
+        // Método simplificado: ya no muestra modal para evitar problemas de timing
+        System.out.println("[VistaChatPrincipal] Sincronización inicial: " + totalEsperado + " mensajes esperados");
     }
 
-    private void mostrarCompletadoSincronizacion(int insertados, boolean exito, String mensajeError) {
-        if (modalSincronizacion != null && lblModalMensaje != null && progressBarModal != null) {
-            if (exito) {
-                lblModalMensaje.setText("¡Sincronización completada!");
-                lblModalMensaje.setForeground(new Color(0, 150, 0)); // Verde
-                progressBarModal.setIndeterminate(false);
-                progressBarModal.setValue(100);
-                progressBarModal.setString("✓ " + insertados + " mensajes sincronizados");
-                
-                // Cerrar el modal después de 2 segundos para que el usuario vea el mensaje
-                javax.swing.Timer closeTimer = new javax.swing.Timer(2000, e -> {
-                    ocultarModalSincronizacion();
-                    // Refrescar la vista actual si hay una conversación seleccionada
-                    refrescarMensajesActuales();
-                });
-                closeTimer.setRepeats(false);
-                closeTimer.start();
-            } else {
-                lblModalMensaje.setText("Error en la sincronización");
-                lblModalMensaje.setForeground(Color.RED);
-                progressBarModal.setIndeterminate(false);
-                progressBarModal.setValue(0);
-                progressBarModal.setString("✗ " + (mensajeError != null ? mensajeError : "Error desconocido"));
-                
-                // Cerrar después de 3 segundos para que vean el error
-                javax.swing.Timer closeTimer = new javax.swing.Timer(3000, e -> ocultarModalSincronizacion());
-                closeTimer.setRepeats(false);
-                closeTimer.start();
-            }
-        } else {
-            // Si no hay modal visible, solo refrescar
-            if (exito) {
-                refrescarMensajesActuales();
-            }
-        }
-    }
+
 
     private static String extraerCampo(String jsonLinea, String campo) {
         try {

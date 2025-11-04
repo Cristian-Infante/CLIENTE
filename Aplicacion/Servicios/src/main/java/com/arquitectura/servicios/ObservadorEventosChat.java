@@ -37,15 +37,19 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
     
     private void notificarSincronizacionCompletada(int insertados, boolean exito, String mensajeError) {
         SincronizacionCompletadaListener listener = this.sincronizacionListener;
+        System.out.println("[ObservadorEventosChat] notificarSincronizacionCompletada: listener=" + (listener != null ? "REGISTRADO" : "NULL") + ", insertados=" + insertados + ", exito=" + exito);
         if (listener != null) {
             // Ejecutar en el hilo de eventos de Swing para actualizar la UI
             javax.swing.SwingUtilities.invokeLater(() -> {
                 try {
+                    System.out.println("[ObservadorEventosChat] Ejecutando callback de sincronización completada");
                     listener.onSincronizacionCompletada(insertados, exito, mensajeError);
                 } catch (Exception e) {
                     System.err.println("Error al notificar sincronización completada: " + e.getMessage());
                 }
             });
+        } else {
+            System.out.println("[ObservadorEventosChat] ⚠️ No hay listener registrado para sincronización completada");
         }
     }
     
