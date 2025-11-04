@@ -10,6 +10,7 @@ import com.arquitectura.entidades.MensajeLocal;
 import com.arquitectura.entidades.TextoMensajeLocal;
 import com.arquitectura.servicios.ServicioConexionChat;
 import com.arquitectura.servicios.ObservadorEventosChat;
+import com.arquitectura.servicios.ServicioContextoDatos;
 import com.arquitectura.servicios.SincronizacionCompletadaListener;
 import com.arquitectura.infra.net.OyenteMensajesChat;
 import com.arquitectura.servicios.OyenteActualizacionMensajes;
@@ -475,11 +476,13 @@ public class VistaChatPrincipal extends JFrame {
             }
             
             @Override public void onEstadoUsuarioActualizado(ClienteLocal usuario, Integer sesionesActivas, String timestampIso) {
-                try { 
-                    System.out.println("[VistaChatPrincipal] onEstadoUsuarioActualizado usuario=" + 
-                        (usuario == null ? "null" : usuario.getNombreDeUsuario()) + " sesiones=" + sesionesActivas); 
+                try {
+                    System.out.println("[VistaChatPrincipal] onEstadoUsuarioActualizado usuario=" +
+                        (usuario == null ? "null" : usuario.getNombreDeUsuario()) + " sesiones=" + sesionesActivas);
                 } catch (Exception ignored) {}
-                
+
+                sincronizarIdentidadUsuarioActual(usuario);
+
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     try {
                         // Actualizar la lista de usuarios para reflejar el cambio de estado
@@ -880,6 +883,69 @@ public class VistaChatPrincipal extends JFrame {
             JScrollBar barra = scrollMensajes.getVerticalScrollBar();
             if (barra != null) {
                 barra.setValue(barra.getMaximum());
+            }
+        });
+    }
+
+    private void sincronizarIdentidadUsuarioActual(ClienteLocal usuarioNotificado) {
+        if (usuarioNotificado == null || usuarioActual == null) {
+            return;
+        }
+
+        String miEmail = usuarioActual.getEmail();
+        String miUsuario = usuarioActual.getNombreDeUsuario();
+        boolean coincide = false;
+
+        if (usuarioActual.getId() != null && usuarioNotificado.getId() != null
+                && usuarioActual.getId().equals(usuarioNotificado.getId())) {
+            coincide = true;
+        } else if (miEmail != null && usuarioNotificado.getEmail() != null
+                && miEmail.equalsIgnoreCase(usuarioNotificado.getEmail())) {
+            coincide = true;
+        } else if (miUsuario != null && usuarioNotificado.getNombreDeUsuario() != null
+                && miUsuario.equalsIgnoreCase(usuarioNotificado.getNombreDeUsuario())) {
+            coincide = true;
+        }
+
+        if (!coincide) {
+            return;
+        }
+
+        boolean datosActualizados = false;
+
+        if (usuarioNotificado.getId() != null && usuarioNotificado.getId() > 0
+                && !usuarioNotificado.getId().equals(usuarioActual.getId())) {
+            usuarioActual.setId(usuarioNotificado.getId());
+            datosActualizados = true;
+        }
+
+        if (usuarioNotificado.getNombreDeUsuario() != null
+                && !usuarioNotificado.getNombreDeUsuario().isBlank()
+                && !usuarioNotificado.getNombreDeUsuario().equals(usuarioActual.getNombreDeUsuario())) {
+            usuarioActual.setNombreDeUsuario(usuarioNotificado.getNombreDeUsuario());
+            datosActualizados = true;
+        }
+
+        if (usuarioNotificado.getEmail() != null
+                && !usuarioNotificado.getEmail().isBlank()
+                && (usuarioActual.getEmail() == null
+                    || !usuarioNotificado.getEmail().equalsIgnoreCase(usuarioActual.getEmail()))) {
+            usuarioActual.setEmail(usuarioNotificado.getEmail());
+            datosActualizados = true;
+        }
+
+        if (!datosActualizados) {
+            return;
+        }
+
+        chatController.actualizarIdentidadCliente(usuarioActual.getId(), usuarioActual.getNombreDeUsuario());
+        try {
+            ServicioContextoDatos.configurarUsuarioActual(usuarioActual.getId(), usuarioActual.getNombreDeUsuario());
+        } catch (Exception ignored) {}
+
+        SwingUtilities.invokeLater(() -> {
+            if (lblUsuario != null && usuarioActual.getNombreDeUsuario() != null) {
+                lblUsuario.setText("Usuario: " + usuarioActual.getNombreDeUsuario());
             }
         });
     }

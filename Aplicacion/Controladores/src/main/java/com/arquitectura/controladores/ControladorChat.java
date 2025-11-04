@@ -86,6 +86,30 @@ public class ControladorChat {
         }
     }
 
+    public void actualizarIdentidadCliente(Long nuevoId, String nuevoNombre) {
+        if (clienteActual == null) {
+            return;
+        }
+        Long idAnterior = clienteActual.getId();
+        boolean cambioId = nuevoId != null && nuevoId > 0 && !nuevoId.equals(idAnterior);
+        if (cambioId) {
+            if (idAnterior != null) {
+                cacheNombres.remove(idAnterior);
+            }
+            clienteActual.setId(nuevoId);
+        }
+
+        if (nuevoNombre != null && !nuevoNombre.isBlank()) {
+            clienteActual.setNombreDeUsuario(nuevoNombre);
+        }
+
+        Long idActual = clienteActual.getId();
+        String nombreActual = clienteActual.getNombreDeUsuario();
+        if (idActual != null && nombreActual != null && !nombreActual.isBlank()) {
+            cacheNombres.put(idActual, nombreActual);
+        }
+    }
+
     private List<String> convertirMensajesAString(List<MensajeLocal> mensajes) {
         java.util.List<String> lines = new java.util.ArrayList<>();
         if (mensajes == null) {
