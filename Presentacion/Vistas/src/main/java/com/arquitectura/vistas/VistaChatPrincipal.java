@@ -77,11 +77,7 @@ public class VistaChatPrincipal extends JFrame {
     private CanalLocal canalSeleccionado;
     private OyenteActualizacionMensajes oyenteMensajes;
     private OyenteActualizacionMensajes oyenteSincronizacionGlobal;
-    
-    // Modal de sincronización
-    private JDialog modalSincronizacion;
-    private JLabel lblModalMensaje;
-    private JProgressBar progressBarModal;
+
 
     public VistaChatPrincipal(ClienteLocal usuario, ServicioConexionChat clienteTCP) {
         this.usuarioActual = usuario;
@@ -93,7 +89,7 @@ public class VistaChatPrincipal extends JFrame {
 
         try { ObservadorEventosChat.instancia().registrarEn(clienteTCP); } catch (Exception ignored) {}
         
-        // Listener de sincronización removido para simplificar la interfaz
+
 
         inicializarComponentes();
         configurarVentana();
@@ -136,73 +132,20 @@ public class VistaChatPrincipal extends JFrame {
         oyenteSincronizacionGlobal = new OyenteActualizacionMensajes() {
             @Override
             public void onSincronizacionMensajesIniciada(Long totalEsperado) {
-                // Modal de sincronización removido para evitar problemas de timing
-                System.out.println("[VistaChatPrincipal] Sincronización iniciada: " + totalEsperado + " mensajes esperados");
+                // Modal eliminado - sincronización silenciosa
             }
 
             @Override
             public void onSincronizacionMensajesFinalizada(int insertados, Long totalEsperado, boolean exito, String mensajeError) {
-                // Simplificado: solo ocultar modal si existe y refrescar mensajes si fue exitoso
                 SwingUtilities.invokeLater(() -> {
-                    if (modalSincronizacion != null) {
-                        ocultarModalSincronizacion();
-                    }
-                    if (exito && insertados > 0) {
+                    // Si la sincronización fue exitosa, refrescar la vista actual
+                    if (exito) {
                         refrescarMensajesActuales();
                     }
                 });
             }
         };
         ServicioEventosMensajes.instancia().registrar(oyenteSincronizacionGlobal);
-    }
-
-    private void mostrarModalSincronizacion(String mensaje, Long totalEsperado) {
-        if (modalSincronizacion != null) {
-            modalSincronizacion.dispose();
-        }
-        
-        modalSincronizacion = new JDialog(this, "Sincronización", true);
-        modalSincronizacion.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-        modalSincronizacion.setSize(450, 180);
-        modalSincronizacion.setLocationRelativeTo(this);
-        modalSincronizacion.setResizable(false);
-        
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
-        
-        lblModalMensaje = new JLabel(mensaje);
-        lblModalMensaje.setHorizontalAlignment(SwingConstants.CENTER);
-        lblModalMensaje.setFont(lblModalMensaje.getFont().deriveFont(Font.BOLD, 14f));
-        
-        progressBarModal = new JProgressBar();
-        progressBarModal.setIndeterminate(true);
-        progressBarModal.setStringPainted(true);
-        
-        if (totalEsperado != null && totalEsperado > 0) {
-            progressBarModal.setString("Sincronizando " + totalEsperado + " mensajes...");
-        } else {
-            progressBarModal.setString("Sincronizando mensajes...");
-        }
-        
-        panel.add(lblModalMensaje, BorderLayout.CENTER);
-        panel.add(progressBarModal, BorderLayout.SOUTH);
-        
-        modalSincronizacion.add(panel);
-        modalSincronizacion.setVisible(true);
-    }
-
-    private void ocultarModalSincronizacion() {
-        if (modalSincronizacion != null) {
-            modalSincronizacion.dispose();
-            modalSincronizacion = null;
-            lblModalMensaje = null;
-            progressBarModal = null;
-        }
-    }
-
-    public void mostrarModalSincronizacionInicial(Long totalEsperado) {
-        // Método simplificado: ya no muestra modal para evitar problemas de timing
-        System.out.println("[VistaChatPrincipal] Sincronización inicial: " + totalEsperado + " mensajes esperados");
     }
 
 
@@ -808,7 +751,6 @@ public class VistaChatPrincipal extends JFrame {
                 try { if (oyenteEventos != null) clienteTCP.removerOyente(oyenteEventos); } catch (Exception ignored) {}
                 try { if (oyenteMensajes != null) ServicioEventosMensajes.instancia().remover(oyenteMensajes); } catch (Exception ignored) {}
                 try { if (oyenteSincronizacionGlobal != null) ServicioEventosMensajes.instancia().remover(oyenteSincronizacionGlobal); } catch (Exception ignored) {}
-                ocultarModalSincronizacion();
             }
         });
     }
