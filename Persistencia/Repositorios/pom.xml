@@ -18,7 +18,7 @@
         <!-- Dependencia a la configuración y proveedor de conexión H2 del cliente -->
         <dependency>
             <groupId>com.arquitectura.config</groupId>
-            <artifactId>ConfigClienteDB</artifactId>
+            <artifactId>ConfigDB</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
         <!-- Entidades del dominio para mapear resultados -->
