@@ -30,6 +30,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Base64;
+import java.util.concurrent.CompletableFuture;
 
 public class VistaChatPrincipal extends JFrame {
     private final ClienteLocal usuarioActual;
@@ -96,6 +97,7 @@ public class VistaChatPrincipal extends JFrame {
         configurarVentana();
         registrarOyenteEventos();
         registrarOyenteSincronizacionGlobal();
+        actualizarIndicadorSolicitudes();
         SwingUtilities.invokeLater(this::refrescarSegunTabSeleccionada);
     }
 
@@ -144,6 +146,11 @@ public class VistaChatPrincipal extends JFrame {
                         refrescarMensajesActuales();
                     }
                 });
+            }
+
+            @Override
+            public void onInvitacionActualizada(ServicioEventosMensajes.EventoInvitacion evento) {
+                actualizarIndicadorSolicitudes();
             }
         };
         ServicioEventosMensajes.instancia().registrar(oyenteSincronizacionGlobal);
@@ -626,6 +633,25 @@ public class VistaChatPrincipal extends JFrame {
         vista.setVisible(true);
     }
 
+    private void actualizarIndicadorSolicitudes() {
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return canalController.contarSolicitudesPendientes();
+            } catch (Exception e) {
+                System.err.println("[VistaChatPrincipal] Error contando solicitudes: " + e.getMessage());
+                return 0;
+            }
+        }).thenAccept(count -> SwingUtilities.invokeLater(() -> actualizarTextoSolicitudes(count)));
+    }
+
+    private void actualizarTextoSolicitudes(int count) {
+        if (btnSolicitudes == null) {
+            return;
+        }
+        String texto = count > 0 ? "Solicitudes (" + count + ")" : "Solicitudes";
+        btnSolicitudes.setText(texto);
+    }
+
     private void mostrarVentanaSolicitudes() {
         JDialog dialog = new JDialog(this, "Solicitudes", true);
         dialog.setLayout(new BorderLayout(10,10));
@@ -713,6 +739,7 @@ public class VistaChatPrincipal extends JFrame {
             listaEnv.add(fila);
         }
         listaEnv.revalidate(); listaEnv.repaint();
+        actualizarIndicadorSolicitudes();
     }
 
     private void cerrarSesion() {
