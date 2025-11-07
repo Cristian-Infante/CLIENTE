@@ -584,8 +584,8 @@ public class RepositorioMensajes {
             cn.setAutoCommit(false); // Iniciar transacción
 
             // Preparar statements para inserción
-            String sqlTexto = "INSERT INTO mensajes (server_id, server_ts, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, contexto_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)";
-            String sqlAudio = "INSERT INTO mensajes (server_id, server_ts, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, audio_base64, audio_mime, audio_duracion_seg, contexto_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)";
+            String sqlTexto = "INSERT INTO mensajes (fecha_envio, server_id, server_ts, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, contexto_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)";
+            String sqlAudio = "INSERT INTO mensajes (fecha_envio, server_id, server_ts, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, audio_base64, audio_mime, audio_duracion_seg, contexto_usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?)";
 
             try (PreparedStatement psTexto = cn.prepareStatement(sqlTexto);
                  PreparedStatement psAudio = cn.prepareStatement(sqlAudio)) {
@@ -610,14 +610,7 @@ public class RepositorioMensajes {
                             esAudio = true;
                         }
                         
-                        java.sql.Timestamp serverTs = null;
-                        if (timestamp != null) {
-                            try {
-                                serverTs = java.sql.Timestamp.valueOf(timestamp.replace("T", " ").replace("Z", ""));
-                            } catch (Exception e) {
-                                serverTs = new java.sql.Timestamp(System.currentTimeMillis());
-                            }
-                        }
+                        java.sql.Timestamp serverTs = parseServerTimestamp(timestamp);
 
                         MensajeExistente existente = obtenerMensajePorServerId(cn, serverId);
                         String contenidoTexto = null;
@@ -677,6 +670,7 @@ public class RepositorioMensajes {
 
                             // Agregar al batch de audio
                             int idx = 1;
+                            if (serverTs != null) psAudio.setTimestamp(idx++, serverTs); else psAudio.setNull(idx++, Types.TIMESTAMP);
                             if (serverId != null) psAudio.setLong(idx++, serverId); else psAudio.setNull(idx++, Types.BIGINT);
                             if (serverTs != null) psAudio.setTimestamp(idx++, serverTs); else psAudio.setNull(idx++, Types.TIMESTAMP);
                             psAudio.setString(idx++, tipoMsg != null ? tipoMsg : "AUDIO");
@@ -695,6 +689,7 @@ public class RepositorioMensajes {
                             // Mensaje de texto - extraer desde objeto contenido
                             // Agregar al batch de texto
                             int idx = 1;
+                            if (serverTs != null) psTexto.setTimestamp(idx++, serverTs); else psTexto.setNull(idx++, Types.TIMESTAMP);
                             if (serverId != null) psTexto.setLong(idx++, serverId); else psTexto.setNull(idx++, Types.BIGINT);
                             if (serverTs != null) psTexto.setTimestamp(idx++, serverTs); else psTexto.setNull(idx++, Types.TIMESTAMP);
                             psTexto.setString(idx++, tipoMsg != null ? tipoMsg : "TEXTO");
@@ -724,6 +719,36 @@ public class RepositorioMensajes {
             }
         }
         return insertados;
+    }
+
+    private java.sql.Timestamp parseServerTimestamp(String valor) {
+        if (valor == null) {
+            return new java.sql.Timestamp(System.currentTimeMillis());
+        }
+        String texto = valor.trim();
+        if (texto.isEmpty()) {
+            return new java.sql.Timestamp(System.currentTimeMillis());
+        }
+        try {
+            return java.sql.Timestamp.valueOf(java.time.LocalDateTime.parse(texto));
+        } catch (java.time.format.DateTimeParseException ignored) {
+            try {
+                java.time.OffsetDateTime odt = java.time.OffsetDateTime.parse(texto);
+                return java.sql.Timestamp.from(odt.toInstant());
+            } catch (java.time.format.DateTimeParseException ignored2) {
+                try {
+                    java.time.Instant inst = java.time.Instant.parse(texto);
+                    return java.sql.Timestamp.from(inst);
+                } catch (Exception ignored3) {
+                    try {
+                        String normalizado = texto.replace("Z", "").replace('T', ' ');
+                        return java.sql.Timestamp.valueOf(normalizado);
+                    } catch (Exception ignored4) {
+                        return new java.sql.Timestamp(System.currentTimeMillis());
+                    }
+                }
+            }
+        }
     }
 
     // Métodos de extracción simplificados para mejor rendimiento

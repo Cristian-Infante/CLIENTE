@@ -333,6 +333,10 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             } else if ("NEW_CHANNEL_MESSAGE".equalsIgnoreCase(tipoEvento)) {
                 System.out.println("[ObservadorEventosChat] Procesando NEW_CHANNEL_MESSAGE desde servidor");
                 procesarEventoMensaje(json);
+            } else if ("INVITE_SENT".equalsIgnoreCase(tipoEvento)
+                    || "INVITE_ACCEPTED".equalsIgnoreCase(tipoEvento)
+                    || "INVITE_REJECTED".equalsIgnoreCase(tipoEvento)) {
+                procesarEventoInvitacion(payload, tipoEvento);
             } else {
                 System.out.println("[ObservadorEventosChat] Evento no manejado: " + tipoEvento);
             }
@@ -463,6 +467,44 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             System.out.println("[ObservadorEventosChat] Error insertando en BD: " + e);
         } catch (Exception e) {
             System.out.println("[ObservadorEventosChat] Error procesando evento: " + e + " json=" + SanitizadorBase64Logs.truncarCamposBase64(json));
+        }
+    }
+
+    private void procesarEventoInvitacion(String payloadJson, String tipoEvento) {
+        try {
+            Long canalId = obtenerCampoLong(payloadJson, "canalId");
+            String canalNombre = obtenerCampoTextoPermitirNulo(payloadJson, "canalNombre", "nombreCanal");
+            Boolean canalPrivado = obtenerCampoBooleano(payloadJson, "canalPrivado", "privado");
+            Long invitadorId = obtenerCampoLong(payloadJson, "invitadorId", "ownerId");
+            String invitadorNombre = obtenerCampoTextoPermitirNulo(payloadJson, "invitadorNombre", "ownerNombre");
+            Long invitadoId = obtenerCampoLong(payloadJson, "invitadoId", "destinatarioId");
+            String invitadoNombre = obtenerCampoTextoPermitirNulo(payloadJson, "invitadoNombre", "destinatarioNombre");
+            String estado = obtenerCampoTextoPermitirNulo(payloadJson, "estado", "status");
+            Long invitacionId = obtenerCampoLong(payloadJson, "invitacionId", "inviteId", "id");
+            String timestamp = obtenerCampoTextoPermitirNulo(payloadJson, "timestamp", "timeStamp");
+
+            ServicioEventosMensajes.EventoInvitacion evento = new ServicioEventosMensajes.EventoInvitacion(
+                    tipoEvento,
+                    canalId,
+                    canalNombre,
+                    canalPrivado,
+                    invitadorId,
+                    invitadorNombre,
+                    invitadoId,
+                    invitadoNombre,
+                    estado,
+                    invitacionId,
+                    timestamp
+            );
+
+            ServicioEventosMensajes.instancia().notificarInvitacionActualizada(evento);
+
+            if ("INVITE_ACCEPTED".equalsIgnoreCase(tipoEvento) && canalId != null) {
+                ServicioEventosMensajes.instancia().notificarCanal(canalId);
+            }
+
+        } catch (Exception e) {
+            System.out.println("[ObservadorEventosChat] Error procesando evento de invitacion: " + e);
         }
     }
 

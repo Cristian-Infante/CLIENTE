@@ -8,6 +8,71 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class ServicioEventosMensajes {
     private final List<OyenteActualizacionMensajes> oyentes = new CopyOnWriteArrayList<>();
 
+    public static class EventoInvitacion {
+        private final String tipoEvento;
+        private final Long canalId;
+        private final String canalNombre;
+        private final Boolean canalPrivado;
+        private final Long invitadorId;
+        private final String invitadorNombre;
+        private final Long invitadoId;
+        private final String invitadoNombre;
+        private final String estado;
+        private final Long invitacionId;
+        private final String timestampIso;
+
+        public EventoInvitacion(String tipoEvento,
+                                 Long canalId,
+                                 String canalNombre,
+                                 Boolean canalPrivado,
+                                 Long invitadorId,
+                                 String invitadorNombre,
+                                 Long invitadoId,
+                                 String invitadoNombre,
+                                 String estado,
+                                 Long invitacionId,
+                                 String timestampIso) {
+            this.tipoEvento = tipoEvento;
+            this.canalId = canalId;
+            this.canalNombre = canalNombre;
+            this.canalPrivado = canalPrivado;
+            this.invitadorId = invitadorId;
+            this.invitadorNombre = invitadorNombre;
+            this.invitadoId = invitadoId;
+            this.invitadoNombre = invitadoNombre;
+            this.estado = estado;
+            this.invitacionId = invitacionId;
+            this.timestampIso = timestampIso;
+        }
+
+        public String getTipoEvento() { return tipoEvento; }
+        public Long getCanalId() { return canalId; }
+        public String getCanalNombre() { return canalNombre; }
+        public Boolean getCanalPrivado() { return canalPrivado; }
+        public Long getInvitadorId() { return invitadorId; }
+        public String getInvitadorNombre() { return invitadorNombre; }
+        public Long getInvitadoId() { return invitadoId; }
+        public String getInvitadoNombre() { return invitadoNombre; }
+        public String getEstado() { return estado; }
+        public Long getInvitacionId() { return invitacionId; }
+        public String getTimestampIso() { return timestampIso; }
+
+        @Override
+        public String toString() {
+            return "EventoInvitacion{" +
+                    "tipoEvento='" + tipoEvento + '\'' +
+                    ", canalId=" + canalId +
+                    ", canalNombre='" + canalNombre + '\'' +
+                    ", canalPrivado=" + canalPrivado +
+                    ", invitadorId=" + invitadorId +
+                    ", invitadoId=" + invitadoId +
+                    ", estado='" + estado + '\'' +
+                    ", invitacionId=" + invitacionId +
+                    ", timestampIso='" + timestampIso + '\'' +
+                    '}';
+        }
+    }
+
     private static class Holder { private static final ServicioEventosMensajes INST = new ServicioEventosMensajes(); }
     public static ServicioEventosMensajes instancia() { return Holder.INST; }
 
@@ -64,5 +129,13 @@ public class ServicioEventosMensajes {
             catch (Exception ex) { System.out.println("[ServicioEventosMensajes] error notificando fin de sincronizacion: " + ex); }
         }
     }
-}
 
+    public void notificarInvitacionActualizada(EventoInvitacion evento) {
+        System.out.println("[ServicioEventosMensajes] notificarInvitacionActualizada evento=" + evento
+                + " listeners=" + oyentes.size());
+        for (OyenteActualizacionMensajes o : oyentes) {
+            try { o.onInvitacionActualizada(evento); }
+            catch (Exception ex) { System.out.println("[ServicioEventosMensajes] error al notificar invitacion: " + ex); }
+        }
+    }
+}

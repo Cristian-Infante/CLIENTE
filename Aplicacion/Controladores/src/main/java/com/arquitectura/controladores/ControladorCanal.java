@@ -51,7 +51,17 @@ public class ControladorCanal {
         } catch (Exception e) { return false; }
     }
 
-    public int contarSolicitudesPendientes() { return 0; }
+    public int contarSolicitudesPendientes() {
+        try {
+            if (!conexion.estaConectado()) conexion.conectar();
+            ServicioComandosChat comandos = new ServicioComandosChat(conexion);
+            java.util.List<com.arquitectura.servicios.ServicioComandosChat.InvRecibida> rec =
+                    comandos.listarInvitacionesRecibidasYEsperar(6000);
+            return rec != null ? rec.size() : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 
     public boolean invitarUsuarioACanal(Long canalId, Long usuarioId, String mensaje) {
         try {
