@@ -709,7 +709,7 @@ public class VistaChatPrincipal extends JFrame {
             acciones.add(btnAceptar); acciones.add(btnRechazar);
             fila.add(acciones, BorderLayout.EAST);
             btnAceptar.addActionListener(e -> {
-                boolean ok = canalController.aceptarSolicitud(inv.canalId);
+                boolean ok = canalController.aceptarSolicitud(inv.canalId, inv.canalUuid);
                 JOptionPane.showMessageDialog(dialog,
                         ok ? "Canal aceptado" : "No se pudo aceptar",
                         ok ? "Exito" : "Error",
@@ -717,7 +717,7 @@ public class VistaChatPrincipal extends JFrame {
                 if (ok) cargarSolicitudes(listaRec, listaEnv, dialog);
             });
             btnRechazar.addActionListener(e -> {
-                boolean ok = canalController.rechazarSolicitud(inv.canalId);
+                boolean ok = canalController.rechazarSolicitud(inv.canalId, inv.canalUuid);
                 JOptionPane.showMessageDialog(dialog,
                         ok ? "Invitacion rechazada" : "No se pudo rechazar",
                         ok ? "Exito" : "Error",

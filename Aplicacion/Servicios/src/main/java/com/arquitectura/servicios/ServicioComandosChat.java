@@ -143,22 +143,25 @@ public class ServicioComandosChat {
         return enviar("CREATE_CHANNEL", p);
     }
 
-    public boolean invitarUsuarioACanal(Long canalId, Long invitadoId) {
+    public boolean invitarUsuarioACanal(Long canalId, String canalUuid, Long invitadoId) {
         Map<String, Object> p = ProtocoloChat.mapa();
         p.put("canalId", canalId);
+        if (canalUuid != null) p.put("canalUuid", canalUuid);
         p.put("invitadoId", invitadoId);
         return enviar("INVITE", p);
     }
 
-    public boolean aceptarInvitacion(Long canalId) {
+    public boolean aceptarInvitacion(Long canalId, String canalUuid) {
         Map<String, Object> p = ProtocoloChat.mapa();
         p.put("canalId", canalId);
+        if (canalUuid != null) p.put("canalUuid", canalUuid);
         return enviar("ACCEPT", p);
     }
 
-    public boolean rechazarInvitacion(Long canalId) {
+    public boolean rechazarInvitacion(Long canalId, String canalUuid) {
         Map<String, Object> p = ProtocoloChat.mapa();
         p.put("canalId", canalId);
+        if (canalUuid != null) p.put("canalUuid", canalUuid);
         return enviar("REJECT", p);
     }
 
@@ -306,6 +309,7 @@ public class ServicioComandosChat {
                 else if (ch == '}') { depth--; if (depth == 0 && objStart >= 0) { objetos.add(arrayText.substring(objStart, i+1)); objStart = -1; } }
             }
             Pattern pid = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
+            Pattern puuid = Pattern.compile("\\\"uuid\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pnom = Pattern.compile("\\\"nombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern ppriv = Pattern.compile("\\\"privado\\\"\\s*:\\s*(true|false)");
             Pattern pidUsuario = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
@@ -318,6 +322,8 @@ public class ServicioComandosChat {
                 Matcher mpriv = ppriv.matcher(obj);
                 com.arquitectura.entidades.CanalLocal c = new com.arquitectura.entidades.CanalLocal();
                 if (mid.find()) { try { c.setId(Long.parseLong(mid.group(1))); } catch (Exception ignored) {} }
+                Matcher muuid = puuid.matcher(obj);
+                if (muuid.find()) { c.setUuid(muuid.group(1)); }
                 if (mnom.find()) { c.setNombre(mnom.group(1)); }
                 if (mpriv.find()) { c.setPrivado(Boolean.parseBoolean(mpriv.group(1))); }
 
@@ -388,10 +394,10 @@ public class ServicioComandosChat {
 
     // Modelos simples para invitaciones
     public static class InvRecibida {
-        public Long canalId; public String canalNombre; public Boolean canalPrivado; public Long invitadorId; public String invitadorNombre;
+        public Long canalId; public String canalUuid; public String canalNombre; public Boolean canalPrivado; public Long invitadorId; public String invitadorNombre;
     }
     public static class InvEnviada {
-        public Long canalId; public String canalNombre; public Boolean canalPrivado; public Long invitadoId; public String invitadoNombre; public String estado;
+        public Long canalId; public String canalUuid; public String canalNombre; public Boolean canalPrivado; public Long invitadoId; public String invitadoNombre; public String estado;
     }
 
     private static java.util.List<InvRecibida> parsearInvRecibidas(String jsonLinea) {
@@ -405,6 +411,7 @@ public class ServicioComandosChat {
             String arrayText = jsonLinea.substring(startArr+1, endArr);
             java.util.List<String> objs = new java.util.ArrayList<>(); depth=0; int os=-1; for (int i=0;i<arrayText.length();i++){ char ch=arrayText.charAt(i); if(ch=='{'){ if(depth==0) os=i; depth++; } else if(ch=='}'){ depth--; if(depth==0&&os>=0){ objs.add(arrayText.substring(os,i+1)); os=-1; } } }
             Pattern pCanalId = Pattern.compile("\\\"canalId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
+            Pattern pCanalUuid = Pattern.compile("\\\"canalUuid\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pCanalNom = Pattern.compile("\\\"canalNombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pCanalPriv = Pattern.compile("\\\"canalPrivado\\\"\\s*:\\s*(true|false)");
             Pattern pInvId = Pattern.compile("\\\"invitadorId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
@@ -413,6 +420,7 @@ public class ServicioComandosChat {
                 InvRecibida ir = new InvRecibida();
                 Matcher m;
                 m = pCanalId.matcher(obj); if (m.find()) { try { ir.canalId = Long.parseLong(m.group(1)); } catch (Exception ignored) {} }
+                m = pCanalUuid.matcher(obj); if (m.find()) ir.canalUuid = m.group(1);
                 m = pCanalNom.matcher(obj); if (m.find()) ir.canalNombre = m.group(1);
                 m = pCanalPriv.matcher(obj); if (m.find()) ir.canalPrivado = Boolean.parseBoolean(m.group(1));
                 m = pInvId.matcher(obj); if (m.find()) { try { ir.invitadorId = Long.parseLong(m.group(1)); } catch (Exception ignored) {} }
@@ -434,6 +442,7 @@ public class ServicioComandosChat {
             String arrayText = jsonLinea.substring(startArr+1, endArr);
             java.util.List<String> objs = new java.util.ArrayList<>(); depth=0; int os=-1; for (int i=0;i<arrayText.length();i++){ char ch=arrayText.charAt(i); if(ch=='{'){ if(depth==0) os=i; depth++; } else if(ch=='}'){ depth--; if(depth==0&&os>=0){ objs.add(arrayText.substring(os,i+1)); os=-1; } } }
             Pattern pCanalId = Pattern.compile("\\\"canalId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
+            Pattern pCanalUuid = Pattern.compile("\\\"canalUuid\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pCanalNom = Pattern.compile("\\\"canalNombre\\\"\\s*:\\s*\\\"(.*?)\\\"");
             Pattern pCanalPriv = Pattern.compile("\\\"canalPrivado\\\"\\s*:\\s*(true|false)");
             Pattern pInvId = Pattern.compile("\\\"invitadoId\\\"\\s*:\\s*\\\"?(\\d+)\\\"?");
@@ -443,6 +452,7 @@ public class ServicioComandosChat {
                 InvEnviada ie = new InvEnviada();
                 Matcher m;
                 m = pCanalId.matcher(obj); if (m.find()) { try { ie.canalId = Long.parseLong(m.group(1)); } catch (Exception ignored) {} }
+                m = pCanalUuid.matcher(obj); if (m.find()) ie.canalUuid = m.group(1);
                 m = pCanalNom.matcher(obj); if (m.find()) ie.canalNombre = m.group(1);
                 m = pCanalPriv.matcher(obj); if (m.find()) ie.canalPrivado = Boolean.parseBoolean(m.group(1));
                 m = pInvId.matcher(obj); if (m.find()) { try { ie.invitadoId = Long.parseLong(m.group(1)); } catch (Exception ignored) {} }

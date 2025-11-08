@@ -2,6 +2,7 @@ package com.arquitectura.entidades;
 
 public class CanalLocal {
     private Long id;
+    private String uuid;
     private String nombre;
     private Boolean privado;
     private java.util.List<ClienteLocal> miembros;
@@ -15,12 +16,27 @@ public class CanalLocal {
         this.privado = privado;
     }
 
+    public CanalLocal(Long id, String uuid, String nombre, Boolean privado) {
+        this.id = id;
+        this.uuid = uuid;
+        this.nombre = nombre;
+        this.privado = privado;
+    }
+
     public Long getId() {
         return id;
     }
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getUuid() {
+        return uuid;
+    }
+
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
     }
 
     public String getNombre() {
