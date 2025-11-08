@@ -11,6 +11,7 @@ public class ServicioEventosMensajes {
     public static class EventoInvitacion {
         private final String tipoEvento;
         private final Long canalId;
+        private final String canalUuid;
         private final String canalNombre;
         private final Boolean canalPrivado;
         private final Long invitadorId;
@@ -23,6 +24,7 @@ public class ServicioEventosMensajes {
 
         public EventoInvitacion(String tipoEvento,
                                  Long canalId,
+                                 String canalUuid,
                                  String canalNombre,
                                  Boolean canalPrivado,
                                  Long invitadorId,
@@ -34,6 +36,7 @@ public class ServicioEventosMensajes {
                                  String timestampIso) {
             this.tipoEvento = tipoEvento;
             this.canalId = canalId;
+            this.canalUuid = canalUuid;
             this.canalNombre = canalNombre;
             this.canalPrivado = canalPrivado;
             this.invitadorId = invitadorId;
@@ -47,6 +50,7 @@ public class ServicioEventosMensajes {
 
         public String getTipoEvento() { return tipoEvento; }
         public Long getCanalId() { return canalId; }
+        public String getCanalUuid() { return canalUuid; }
         public String getCanalNombre() { return canalNombre; }
         public Boolean getCanalPrivado() { return canalPrivado; }
         public Long getInvitadorId() { return invitadorId; }
@@ -62,6 +66,7 @@ public class ServicioEventosMensajes {
             return "EventoInvitacion{" +
                     "tipoEvento='" + tipoEvento + '\'' +
                     ", canalId=" + canalId +
+                    ", canalUuid='" + canalUuid + '\'' +
                     ", canalNombre='" + canalNombre + '\'' +
                     ", canalPrivado=" + canalPrivado +
                     ", invitadorId=" + invitadorId +

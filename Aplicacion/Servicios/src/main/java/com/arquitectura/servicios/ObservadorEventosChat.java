@@ -473,6 +473,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
     private void procesarEventoInvitacion(String payloadJson, String tipoEvento) {
         try {
             Long canalId = obtenerCampoLong(payloadJson, "canalId");
+            String canalUuid = obtenerCampoTextoPermitirNulo(payloadJson, "canalUuid", "uuidCanal", "canalUUID");
             String canalNombre = obtenerCampoTextoPermitirNulo(payloadJson, "canalNombre", "nombreCanal");
             Boolean canalPrivado = obtenerCampoBooleano(payloadJson, "canalPrivado", "privado");
             Long invitadorId = obtenerCampoLong(payloadJson, "invitadorId", "ownerId");
@@ -486,6 +487,7 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             ServicioEventosMensajes.EventoInvitacion evento = new ServicioEventosMensajes.EventoInvitacion(
                     tipoEvento,
                     canalId,
+                    canalUuid,
                     canalNombre,
                     canalPrivado,
                     invitadorId,

@@ -232,7 +232,7 @@ public class VistaCanal extends JFrame {
             com.arquitectura.entidades.ClienteLocal userSel = listaUsuarios.getSelectedValue();
             if (canalSel == null) { JOptionPane.showMessageDialog(dialog, "Seleccione un canal", "Validacion", JOptionPane.WARNING_MESSAGE); return; }
             if (userSel == null) { JOptionPane.showMessageDialog(dialog, "Seleccione un usuario", "Validacion", JOptionPane.WARNING_MESSAGE); return; }
-            boolean ok = canalController.invitarUsuarioACanal(canalSel.getId(), userSel.getId(), null);
+            boolean ok = canalController.invitarUsuarioACanal(canalSel.getId(), canalSel.getUuid(), userSel.getId(), null);
             if (ok) { JOptionPane.showMessageDialog(dialog, "Invitacion enviada", "Exito", JOptionPane.INFORMATION_MESSAGE); dialog.dispose(); }
             else { JOptionPane.showMessageDialog(dialog, "No se pudo enviar la invitacion", "Error", JOptionPane.ERROR_MESSAGE); }
         });

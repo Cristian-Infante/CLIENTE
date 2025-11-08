@@ -33,21 +33,21 @@ public class ControladorCanal {
         return Collections.emptyList();
     }
 
-    public boolean aceptarSolicitud(Long canalId) {
+    public boolean aceptarSolicitud(Long canalId, String canalUuid) {
         try {
-            if (canalId == null) return false;
+            if (canalId == null && (canalUuid == null || canalUuid.isBlank())) return false;
             if (!conexion.estaConectado()) conexion.conectar();
             ServicioComandosChat comandos = new ServicioComandosChat(conexion);
-            return comandos.aceptarInvitacion(canalId);
+            return comandos.aceptarInvitacion(canalId, canalUuid);
         } catch (Exception e) { return false; }
     }
 
-    public boolean rechazarSolicitud(Long canalId) {
+    public boolean rechazarSolicitud(Long canalId, String canalUuid) {
         try {
-            if (canalId == null) return false;
+            if (canalId == null && (canalUuid == null || canalUuid.isBlank())) return false;
             if (!conexion.estaConectado()) conexion.conectar();
             ServicioComandosChat comandos = new ServicioComandosChat(conexion);
-            return comandos.rechazarInvitacion(canalId);
+            return comandos.rechazarInvitacion(canalId, canalUuid);
         } catch (Exception e) { return false; }
     }
 
@@ -63,12 +63,12 @@ public class ControladorCanal {
         }
     }
 
-    public boolean invitarUsuarioACanal(Long canalId, Long usuarioId, String mensaje) {
+    public boolean invitarUsuarioACanal(Long canalId, String canalUuid, Long usuarioId, String mensaje) {
         try {
-            if (canalId == null || usuarioId == null) return false;
+            if ((canalId == null && (canalUuid == null || canalUuid.isBlank())) || usuarioId == null) return false;
             if (!conexion.estaConectado()) conexion.conectar();
             ServicioComandosChat comandos = new ServicioComandosChat(conexion);
-            return comandos.invitarUsuarioACanal(canalId, usuarioId);
+            return comandos.invitarUsuarioACanal(canalId, canalUuid, usuarioId);
         } catch (Exception e) {
             return false;
         }
