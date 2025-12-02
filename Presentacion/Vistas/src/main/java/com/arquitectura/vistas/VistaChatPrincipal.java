@@ -514,14 +514,25 @@ public class VistaChatPrincipal extends JFrame {
             oyenteMensajes = null;
         }
         final String uuidCanalActual = canalSeleccionado != null ? canalSeleccionado.getUuid() : null;
+        final Long idCanalSuscrito = canalSeleccionado != null ? canalSeleccionado.getId() : null;
+        System.out.println("[VistaChatPrincipal] subscribirActualizacionesCanal canalId=" + idCanalSuscrito + " uuid=" + uuidCanalActual);
         oyenteMensajes = new OyenteActualizacionMensajes() {
             @Override public void onCanalActualizado(Long id) {
-                if (id == null || canalSeleccionado == null) return;
-                if (!id.equals(canalSeleccionado.getId())) return;
+                System.out.println("[VistaChatPrincipal] onCanalActualizado recibido id=" + id + " canalSuscrito=" + idCanalSuscrito);
+                if (id == null || canalSeleccionado == null) {
+                    System.out.println("[VistaChatPrincipal] onCanalActualizado IGNORADO - id o canalSeleccionado es null");
+                    return;
+                }
+                if (!id.equals(canalSeleccionado.getId())) {
+                    System.out.println("[VistaChatPrincipal] onCanalActualizado IGNORADO - id=" + id + " != canalSeleccionado.getId()=" + canalSeleccionado.getId());
+                    return;
+                }
+                System.out.println("[VistaChatPrincipal] onCanalActualizado PROCESANDO - recargando mensajes del canal " + id);
                 // Combinar mensajes por ID local y por UUID para obtener todos
                 java.util.List<MensajeLocal> histPorId = chatController.obtenerMensajesCanalDetallados(id);
                 java.util.List<MensajeLocal> histPorUuid = uuidCanalActual != null ? chatController.obtenerMensajesCanalDetalladosPorUuid(uuidCanalActual) : java.util.List.of();
                 java.util.List<MensajeLocal> hist = combinarMensajesCanal(histPorId, histPorUuid);
+                System.out.println("[VistaChatPrincipal] onCanalActualizado mensajes encontrados: " + hist.size());
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     limpiarMensajes();
                     mostrarMensajes(hist);
