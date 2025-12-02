@@ -490,37 +490,44 @@ public class VistaChatPrincipal extends JFrame {
             try { ServicioEventosMensajes.instancia().remover(oyenteMensajes); } catch (Exception ignored) {}
             oyenteMensajes = null;
         }
+        // Guardar el nombre del usuario seleccionado para comparación P2P
+        final String nombreUsuarioActual = usuarioSeleccionado != null ? usuarioSeleccionado.getNombreDeUsuario() : null;
         oyenteMensajes = new OyenteActualizacionMensajes() {
+            // Flag para evitar procesamiento duplicado de notificaciones
+            private volatile boolean procesando = false;
+
             @Override public void onPrivadoActualizado(Long id) {
-                // Debug log to trace private notification delivery
-                try { System.out.println("[VistaChatPrincipal] onPrivadoActualizado called id=" + id + " usuarioSeleccionado=" + (usuarioSeleccionado==null?"null":usuarioSeleccionado.getId())); } catch (Exception ignored) {}
-                if (id == null || usuarioSeleccionado == null) return;
-                if (!id.equals(usuarioSeleccionado.getId())) return;
-                java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(id);
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    limpiarMensajes();
-                    mostrarMensajes(hist);
-                });
+                // Ignorar notificación por ID - preferimos la notificación por nombre para P2P
+                // La notificación por nombre siempre viene después
             }
 
             @Override public void onPrivadoActualizadoPorNombre(String nombreUsuario, Long idRemoto) {
                 // Comparación por nombre para compatibilidad P2P (IDs diferentes entre servidores)
+                if (procesando) return; // Evitar procesamiento duplicado
                 try { 
                     System.out.println("[VistaChatPrincipal] onPrivadoActualizadoPorNombre nombre=" + nombreUsuario 
                         + " idRemoto=" + idRemoto
-                        + " usuarioSeleccionado=" + (usuarioSeleccionado==null?"null":usuarioSeleccionado.getNombreDeUsuario())); 
+                        + " usuarioSeleccionado=" + nombreUsuarioActual); 
                 } catch (Exception ignored) {}
-                if (nombreUsuario == null || usuarioSeleccionado == null) return;
-                String nombreSeleccionado = usuarioSeleccionado.getNombreDeUsuario();
-                if (nombreSeleccionado == null) return;
+                if (nombreUsuario == null || nombreUsuarioActual == null) return;
                 // Comparar por nombre (case-insensitive)
-                if (!nombreUsuario.trim().equalsIgnoreCase(nombreSeleccionado.trim())) return;
-                // Usar búsqueda por nombre para obtener la conversación (compatible con IDs P2P diferentes)
-                java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetalladaPorNombre(nombreSeleccionado);
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    limpiarMensajes();
-                    mostrarMensajes(hist);
-                });
+                if (!nombreUsuario.trim().equalsIgnoreCase(nombreUsuarioActual.trim())) return;
+                
+                procesando = true;
+                try {
+                    // Usar búsqueda por nombre para obtener la conversación (compatible con IDs P2P diferentes)
+                    java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetalladaPorNombre(nombreUsuarioActual);
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        try {
+                            limpiarMensajes();
+                            mostrarMensajes(hist);
+                        } finally {
+                            procesando = false;
+                        }
+                    });
+                } catch (Exception e) {
+                    procesando = false;
+                }
             }
             
             @Override public void onEstadoUsuarioActualizado(ClienteLocal usuario, Integer sesionesActivas, String timestampIso) {
