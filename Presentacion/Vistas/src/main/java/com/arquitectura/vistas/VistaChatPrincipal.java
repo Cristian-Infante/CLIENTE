@@ -30,6 +30,8 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 
 public class VistaChatPrincipal extends JFrame {
@@ -79,6 +81,10 @@ public class VistaChatPrincipal extends JFrame {
     private CanalLocal canalSeleccionado;
     private OyenteActualizacionMensajes oyenteMensajes;
     private OyenteActualizacionMensajes oyenteSincronizacionGlobal;
+
+    // Mapa de estados de conexión por nombre de usuario (para P2P)
+    // Clave: nombre de usuario en minúsculas, Valor: true=conectado, false=desconectado
+    private final Map<String, Boolean> estadosUsuariosPorNombre = new ConcurrentHashMap<>();
 
 
     public VistaChatPrincipal(ClienteLocal usuario, ServicioConexionChat clienteTCP) {
@@ -312,9 +318,63 @@ public class VistaChatPrincipal extends JFrame {
             if (!clienteTCP.estaConectado()) clienteTCP.conectar();
             com.arquitectura.servicios.ServicioComandosChat comandos = new com.arquitectura.servicios.ServicioComandosChat(clienteTCP);
             java.util.List<ClienteLocal> usuarios = comandos.listarUsuariosYEsperar(6000);
+            
+            // ========== SOLUCIÓN P2P: Obtener lista de conectados por NOMBRE ==========
+            // El servidor LIST_USERS puede tener estados incorrectos por conflicto de IDs entre servidores P2P
+            // Usamos LIST_CONNECTED para obtener los nombres de usuarios realmente conectados
+            // y luego aplicamos esos estados POR NOMBRE (no por ID)
+            java.util.Set<String> conectadosPorNombre = new java.util.HashSet<>();
+            try {
+                java.util.List<ClienteLocal> conectados = comandos.listarConectadosYEsperar(3000);
+                if (conectados != null) {
+                    for (ClienteLocal c : conectados) {
+                        if (c != null && c.getNombreDeUsuario() != null) {
+                            String nombreNorm = c.getNombreDeUsuario().trim().toLowerCase();
+                            conectadosPorNombre.add(nombreNorm);
+                            // También guardamos en el mapa global para que persista
+                            ServicioEventosMensajes.instancia().actualizarEstadoGlobalPorNombre(nombreNorm, true);
+                            System.out.println("[VistaChatPrincipal] Usuario conectado detectado via LIST_CONNECTED: " + nombreNorm);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("[VistaChatPrincipal] Error obteniendo LIST_CONNECTED: " + e.getMessage());
+            }
+            // ========== FIN SOLUCIÓN P2P ==========
+            
             modeloUsuarios.clear();
             if (usuarios != null) {
                 usuarios = new java.util.ArrayList<>(usuarios);
+                
+                // Obtener estados del mapa GLOBAL del servicio (fuente de verdad P2P)
+                // Este mapa se actualiza con TODOS los eventos USER_STATUS_CHANGED,
+                // incluso los que llegaron antes de que esta vista se registrara
+                Map<String, Boolean> estadosGlobales = ServicioEventosMensajes.instancia().obtenerEstadosGlobalesPorNombre();
+                
+                // Aplicar estados: primero desde LIST_CONNECTED (más fiable para P2P), luego desde eventos
+                for (ClienteLocal u : usuarios) {
+                    if (u != null && u.getNombreDeUsuario() != null) {
+                        String nombreNorm = u.getNombreDeUsuario().trim().toLowerCase();
+                        
+                        // Prioridad 1: Si está en la lista de conectados por nombre
+                        if (conectadosPorNombre.contains(nombreNorm)) {
+                            u.setEstado(true);
+                            System.out.println("[VistaChatPrincipal] Estado por LIST_CONNECTED: " + nombreNorm + " -> true");
+                        }
+                        // Prioridad 2: Estado del mapa global (eventos USER_STATUS_CHANGED)
+                        else {
+                            Boolean estadoGlobal = estadosGlobales.get(nombreNorm);
+                            if (estadoGlobal != null) {
+                                u.setEstado(estadoGlobal);
+                                System.out.println("[VistaChatPrincipal] Estado por mapa global: " + nombreNorm + " -> " + estadoGlobal);
+                            } else {
+                                // Si no está en ningún lado, marcar como desconectado
+                                u.setEstado(false);
+                            }
+                        }
+                    }
+                }
+                
                 usuarios.sort((a, b) -> {
                     boolean aCon = Boolean.TRUE.equals(a.getEstado());
                     boolean bCon = Boolean.TRUE.equals(b.getEstado());
@@ -542,6 +602,11 @@ public class VistaChatPrincipal extends JFrame {
                 if (usuario != null && usuario.getNombreDeUsuario() != null) {
                     final String nombreBuscar = usuario.getNombreDeUsuario().trim().toLowerCase();
                     final Boolean nuevoEstado = usuario.getEstado();
+                    
+                    // Guardar el estado en el mapa local (fuente de verdad para P2P)
+                    estadosUsuariosPorNombre.put(nombreBuscar, Boolean.TRUE.equals(nuevoEstado));
+                    System.out.println("[VistaChatPrincipal] Estado guardado en mapa: " + nombreBuscar + " -> " + nuevoEstado);
+                    
                     javax.swing.SwingUtilities.invokeLater(() -> {
                         try {
                             // Buscar el usuario por nombre en el modelo y actualizar su estado
@@ -552,6 +617,7 @@ public class VistaChatPrincipal extends JFrame {
                                     u.setEstado(nuevoEstado);
                                     // Forzar repintado del elemento
                                     modeloUsuarios.set(i, u);
+                                    System.out.println("[VistaChatPrincipal] UI actualizada para: " + nombreBuscar + " -> " + nuevoEstado);
                                     break;
                                 }
                             }

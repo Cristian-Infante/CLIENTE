@@ -3,10 +3,16 @@ package com.arquitectura.servicios;
 import com.arquitectura.entidades.ClienteLocal;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ServicioEventosMensajes {
     private final List<OyenteActualizacionMensajes> oyentes = new CopyOnWriteArrayList<>();
+    
+    // Mapa global de estados de conexión por nombre de usuario (fuente de verdad P2P)
+    // Clave: nombre de usuario en minúsculas, Valor: true=conectado, false=desconectado
+    private final Map<String, Boolean> estadosGlobalesPorNombre = new ConcurrentHashMap<>();
 
     public static class EventoInvitacion {
         private final String tipoEvento;
@@ -127,10 +133,52 @@ public class ServicioEventosMensajes {
     public void notificarEstadoUsuarioActualizado(ClienteLocal usuario, Integer sesionesActivas, String timestampIso) {
         System.out.println("[ServicioEventosMensajes] notificarEstadoUsuario usuarioId="
                 + (usuario != null ? usuario.getId() : null) + " listeners=" + oyentes.size());
+        
+        // Guardar estado en mapa global (fuente de verdad P2P - usa nombre, no ID)
+        if (usuario != null && usuario.getNombreDeUsuario() != null) {
+            String nombreNorm = usuario.getNombreDeUsuario().trim().toLowerCase();
+            Boolean estado = usuario.getEstado();
+            estadosGlobalesPorNombre.put(nombreNorm, Boolean.TRUE.equals(estado));
+            System.out.println("[ServicioEventosMensajes] Estado global guardado: " + nombreNorm + " -> " + estado);
+        }
+        
         for (OyenteActualizacionMensajes o : oyentes) {
             try { o.onEstadoUsuarioActualizado(usuario, sesionesActivas, timestampIso); }
             catch (Exception ex) { System.out.println("[ServicioEventosMensajes] error al notificar estado de usuario: " + ex); }
         }
+    }
+    
+    /**
+     * Obtiene el mapa de estados globales por nombre de usuario.
+     * Este mapa se actualiza con cada evento USER_STATUS_CHANGED y es la fuente de verdad
+     * para el estado de conexión en entornos P2P donde los IDs pueden diferir entre servidores.
+     * @return Mapa inmutable de estados (clave: nombre en minúsculas, valor: conectado)
+     */
+    public Map<String, Boolean> obtenerEstadosGlobalesPorNombre() {
+        return new ConcurrentHashMap<>(estadosGlobalesPorNombre);
+    }
+    
+    /**
+     * Obtiene el estado de conexión de un usuario por nombre.
+     * @param nombreUsuario Nombre del usuario
+     * @return true si está conectado, false si está desconectado, null si no hay información
+     */
+    public Boolean obtenerEstadoPorNombre(String nombreUsuario) {
+        if (nombreUsuario == null) return null;
+        return estadosGlobalesPorNombre.get(nombreUsuario.trim().toLowerCase());
+    }
+    
+    /**
+     * Actualiza el estado de conexión de un usuario por nombre.
+     * Usado para poblar el mapa desde LIST_CONNECTED en entornos P2P.
+     * @param nombreUsuario Nombre del usuario (se normaliza a minúsculas)
+     * @param conectado Estado de conexión
+     */
+    public void actualizarEstadoGlobalPorNombre(String nombreUsuario, boolean conectado) {
+        if (nombreUsuario == null) return;
+        String nombreNorm = nombreUsuario.trim().toLowerCase();
+        estadosGlobalesPorNombre.put(nombreNorm, conectado);
+        System.out.println("[ServicioEventosMensajes] Estado global actualizado manualmente: " + nombreNorm + " -> " + conectado);
     }
 
     public void notificarSincronizacionIniciada(Long totalEsperado) {

@@ -328,7 +328,29 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             if (payload == null) payload = compact;
             
             // Extraer el tipo de evento
-            String tipoEvento = obtenerCampoTexto(payload, "evento", "tipo", "eventType");
+            String tipoEvento = obtenerCampoTexto(payload, "evento", "eventType");
+            
+            // Si no hay evento explícito, verificar si es un mensaje de canal o privado por su estructura
+            // Esto es necesario para mensajes P2P que llegan como EVENT sin campo "evento"
+            if (tipoEvento == null || tipoEvento.isBlank()) {
+                Long canalId = obtenerCampoLong(payload, "canalId");
+                Long emisor = obtenerCampoLong(payload, "emisor", "emisorId");
+                Long receptor = obtenerCampoLong(payload, "receptor", "receptorId");
+                String tipoMsg = obtenerCampoTextoPermitirNulo(payload, "tipo", "tipoMensaje");
+                
+                // Es un mensaje de canal si tiene canalId
+                if (canalId != null && emisor != null) {
+                    System.out.println("[ObservadorEventosChat] Detectado mensaje de canal P2P sin campo 'evento' - canalId=" + canalId);
+                    procesarEventoMensaje(json);
+                    return;
+                }
+                // Es un mensaje privado si tiene emisor y receptor sin canalId
+                if (emisor != null && receptor != null && canalId == null) {
+                    System.out.println("[ObservadorEventosChat] Detectado mensaje privado P2P sin campo 'evento' - emisor=" + emisor + " receptor=" + receptor);
+                    procesarEventoMensaje(json);
+                    return;
+                }
+            }
             
             if ("USER_STATUS_CHANGED".equalsIgnoreCase(tipoEvento)) {
                 procesarCambioEstadoUsuario(payload);
