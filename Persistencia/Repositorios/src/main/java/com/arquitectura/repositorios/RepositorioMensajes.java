@@ -298,6 +298,7 @@ public class RepositorioMensajes {
      * Útil en entornos P2P donde los IDs pueden diferir entre servidores pero los nombres son consistentes.
      */
     public java.util.List<com.arquitectura.entidades.MensajeLocal> listarMensajesPrivadosPorNombre(String miNombre, String otroNombre, Integer limit) throws SQLException {
+        System.out.println("[RepositorioMensajes] listarMensajesPrivadosPorNombre miNombre=" + miNombre + " otroNombre=" + otroNombre);
         if (otroNombre == null || otroNombre.isBlank()) return java.util.List.of();
         boolean nombrePropioValido = miNombre != null && !miNombre.isBlank();
         String sql = "SELECT id, fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg " +
@@ -367,6 +368,7 @@ public class RepositorioMensajes {
                 }
             }
         }
+        System.out.println("[RepositorioMensajes] listarMensajesPrivadosPorNombre found " + res.size() + " messages");
         return res;
     }
 

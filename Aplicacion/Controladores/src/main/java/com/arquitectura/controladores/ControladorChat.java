@@ -84,6 +84,10 @@ public class ControladorChat {
         try {
             var repo = new RepositorioMensajes();
             String miNombre = clienteActual != null ? clienteActual.getNombreDeUsuario() : null;
+            // Si miNombre es un email, no lo usamos para filtrar (buscar solo por otroNombre)
+            if (miNombre != null && miNombre.contains("@")) {
+                miNombre = null;
+            }
             List<MensajeLocal> mensajes = repo.listarMensajesPrivadosPorNombre(miNombre, nombreOtroUsuario, null);
             return completarNombres(mensajes);
         } catch (Exception e) {
