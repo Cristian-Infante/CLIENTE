@@ -402,6 +402,59 @@ public class RepositorioMensajes {
         }
     }
 
+    /**
+     * Verifica si existe un audio por nombres de usuario y ruta (P2P compatible).
+     * No usa IDs ya que pueden diferir entre servidores.
+     */
+    public boolean existeAudioPorNombreYRuta(String emisorNombre, String receptorNombre, Long canalId, String canalUuid, String rutaArchivo, java.sql.Timestamp ts) throws SQLException {
+        if (rutaArchivo == null || rutaArchivo.isBlank()) return false;
+        
+        StringBuilder sql = new StringBuilder("SELECT 1 FROM mensajes WHERE contexto_usuario_id = ? AND es_audio = TRUE AND ruta_audio = ?");
+        
+        // Para canales, verificar por UUID o canalId
+        if (canalId != null || (canalUuid != null && !canalUuid.isBlank())) {
+            if (canalUuid != null && !canalUuid.isBlank()) {
+                sql.append(" AND canal_uuid = ?");
+            } else {
+                sql.append(" AND canal_id = ?");
+            }
+        } else {
+            // Mensaje privado: verificar por nombres
+            sql.append(" AND canal_id IS NULL");
+            if (emisorNombre != null && !emisorNombre.isBlank()) {
+                sql.append(" AND LOWER(emisor_nombre) = LOWER(?)");
+            }
+            if (receptorNombre != null && !receptorNombre.isBlank()) {
+                sql.append(" AND LOWER(receptor_nombre) = LOWER(?)");
+            }
+        }
+        sql.append(" LIMIT 1");
+        
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
+             PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+            int idx = 1;
+            ps.setLong(idx++, contextoActual());
+            ps.setString(idx++, rutaArchivo);
+            
+            if (canalId != null || (canalUuid != null && !canalUuid.isBlank())) {
+                if (canalUuid != null && !canalUuid.isBlank()) {
+                    ps.setString(idx++, canalUuid);
+                } else {
+                    ps.setLong(idx++, canalId);
+                }
+            } else {
+                if (emisorNombre != null && !emisorNombre.isBlank()) {
+                    ps.setString(idx++, emisorNombre);
+                }
+                if (receptorNombre != null && !receptorNombre.isBlank()) {
+                    ps.setString(idx++, receptorNombre);
+                }
+            }
+            
+            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
+        }
+    }
+
     public long insertarDesdeServidorTexto(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String canalUuid, String contenido, String tipo) throws SQLException {
         if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, false, contenido, null, null, null, null)) {
             return 0L;
@@ -440,20 +493,32 @@ public class RepositorioMensajes {
     }
 
     public long insertarDesdeServidorAudioConRuta(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String canalUuid, String transcripcion, String tipo, String rutaArchivo, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
+        System.out.println("[RepositorioMensajes] insertarDesdeServidorAudioConRuta serverId=" + serverId + " emisorId=" + emisorId + " emisorNombre=" + emisorNombre + " receptorId=" + receptorId + " receptorNombre=" + receptorNombre + " ruta=" + rutaArchivo);
+        
+        // Verificar duplicado por nombre y ruta (P2P compatible)
+        if (existeAudioPorNombreYRuta(emisorNombre, receptorNombre, canalId, canalUuid, rutaArchivo, serverTs)) {
+            System.out.println("[RepositorioMensajes] Audio ya existe (por nombre/ruta), ignorando");
+            return 0L;
+        }
+        
         if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, true, transcripcion, rutaArchivo, audioBase64, mime, duracionSeg)) {
+            System.out.println("[RepositorioMensajes] Audio actualizado localmente");
             return 0L;
         }
 
         MensajeExistente existente = obtenerMensajePorServerId(serverId);
         if (existente != null) {
             if (coincideMensajeAudio(existente, serverTs, emisorId, receptorId, canalId, rutaArchivo)) {
+                System.out.println("[RepositorioMensajes] Audio ya existe por serverId");
                 return 0L;
             }
             logServerIdReutilizado(serverId, existente, emisorId, receptorId, canalId, true, serverTs);
             serverId = null;
         }
 
-        if (existePorCampos(emisorId, receptorId, canalId, true, null, rutaArchivo, serverTs)) return 0L;
+        // NO usar existePorCampos para audios en P2P porque usa IDs que pueden diferir
+        // if (existePorCampos(emisorId, receptorId, canalId, true, null, rutaArchivo, serverTs)) return 0L;
+        
         String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, canal_uuid, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg, server_id, server_ts, contexto_usuario_id) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
