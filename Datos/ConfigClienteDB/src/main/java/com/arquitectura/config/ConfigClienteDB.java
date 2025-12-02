@@ -158,8 +158,10 @@ public class ConfigClienteDB {
             try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio_mime VARCHAR(128)"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio_duracion_seg INT"); } catch (SQLException ignored) {}
             try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS contexto_usuario_id BIGINT"); } catch (SQLException ignored) {}
+            try { st.executeUpdate("ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS canal_uuid VARCHAR(64)"); } catch (SQLException ignored) {}
             try { st.executeUpdate("DROP INDEX IF EXISTS ux_mensajes_server_id"); } catch (SQLException ignored) {}
             try { st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_mensajes_contexto ON mensajes(contexto_usuario_id)"); } catch (SQLException ignored) {}
+            try { st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_mensajes_canal_uuid ON mensajes(canal_uuid)"); } catch (SQLException ignored) {}
             try { st.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS ux_mensajes_contexto_server ON mensajes(contexto_usuario_id, server_id)"); } catch (SQLException ignored) {}
         }
     }

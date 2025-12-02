@@ -101,10 +101,26 @@ public class ServicioEventosMensajes {
         }
     }
 
+    /** Notifica canal usando UUID (para compatibilidad P2P con IDs diferentes entre servidores) */
+    public void notificarCanalPorUuid(String canalUuid, Long canalIdRemoto) {
+        System.out.println("[ServicioEventosMensajes] notificarCanalPorUuid uuid=" + canalUuid + " idRemoto=" + canalIdRemoto + " listeners=" + oyentes.size());
+        for (OyenteActualizacionMensajes o : oyentes) {
+            try { o.onCanalActualizadoPorUuid(canalUuid, canalIdRemoto); } catch (Exception ex) { System.out.println("[ServicioEventosMensajes] error al notificar canal por uuid: " + ex); }
+        }
+    }
+
     public void notificarPrivado(Long usuarioId) {
         System.out.println("[ServicioEventosMensajes] notificarPrivado usuarioId=" + usuarioId + " listeners=" + oyentes.size());
         for (OyenteActualizacionMensajes o : oyentes) {
             try { o.onPrivadoActualizado(usuarioId); } catch (Exception ex) { System.out.println("[ServicioEventosMensajes] error al notificar privado: " + ex); }
+        }
+    }
+
+    /** Notifica chat privado usando nombre de usuario (para compatibilidad P2P con IDs diferentes entre servidores) */
+    public void notificarPrivadoPorNombre(String nombreUsuario, Long idRemoto) {
+        System.out.println("[ServicioEventosMensajes] notificarPrivadoPorNombre nombre=" + nombreUsuario + " idRemoto=" + idRemoto + " listeners=" + oyentes.size());
+        for (OyenteActualizacionMensajes o : oyentes) {
+            try { o.onPrivadoActualizadoPorNombre(nombreUsuario, idRemoto); } catch (Exception ex) { System.out.println("[ServicioEventosMensajes] error al notificar privado por nombre: " + ex); }
         }
     }
 

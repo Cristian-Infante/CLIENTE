@@ -423,8 +423,9 @@ public class VistaChatPrincipal extends JFrame {
             lblDestinatario.setText("Destino: " + usuarioSeleccionado.getNombreDeUsuario());
             limpiarMensajes();
             mostrarInfoUsuario();
-            // Cargar historial privado local
-            java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(usuarioSeleccionado.getId());
+            // Cargar historial privado local - usar búsqueda por nombre para compatibilidad P2P
+            String nombreUsuario = usuarioSeleccionado.getNombreDeUsuario();
+            java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetalladaPorNombre(nombreUsuario);
             mostrarMensajes(hist);
             subscribirActualizacionesPrivado(usuarioSeleccionado.getId());
         }
@@ -437,8 +438,10 @@ public class VistaChatPrincipal extends JFrame {
             lblDestinatario.setText("Canal: " + canalSeleccionado.getNombre());
             limpiarMensajes();
             mostrarInfoCanal();
-            // Cargar historial local del canal desde H2
-            java.util.List<MensajeLocal> historial = chatController.obtenerMensajesCanalDetallados(canalSeleccionado.getId());
+            // Cargar historial local del canal desde H2 (combinando por ID y UUID para compatibilidad P2P)
+            java.util.List<MensajeLocal> histPorId = chatController.obtenerMensajesCanalDetallados(canalSeleccionado.getId());
+            java.util.List<MensajeLocal> histPorUuid = canalSeleccionado.getUuid() != null ? chatController.obtenerMensajesCanalDetalladosPorUuid(canalSeleccionado.getUuid()) : java.util.List.of();
+            java.util.List<MensajeLocal> historial = combinarMensajesCanal(histPorId, histPorUuid);
             mostrarMensajes(historial);
             // Suscribir actualización en caliente para este canal
             subscribirActualizacionesCanal(canalSeleccionado.getId());
@@ -450,11 +453,29 @@ public class VistaChatPrincipal extends JFrame {
             try { ServicioEventosMensajes.instancia().remover(oyenteMensajes); } catch (Exception ignored) {}
             oyenteMensajes = null;
         }
+        final String uuidCanalActual = canalSeleccionado != null ? canalSeleccionado.getUuid() : null;
         oyenteMensajes = new OyenteActualizacionMensajes() {
             @Override public void onCanalActualizado(Long id) {
                 if (id == null || canalSeleccionado == null) return;
                 if (!id.equals(canalSeleccionado.getId())) return;
-                java.util.List<MensajeLocal> hist = chatController.obtenerMensajesCanalDetallados(id);
+                // Combinar mensajes por ID local y por UUID para obtener todos
+                java.util.List<MensajeLocal> histPorId = chatController.obtenerMensajesCanalDetallados(id);
+                java.util.List<MensajeLocal> histPorUuid = uuidCanalActual != null ? chatController.obtenerMensajesCanalDetalladosPorUuid(uuidCanalActual) : java.util.List.of();
+                java.util.List<MensajeLocal> hist = combinarMensajesCanal(histPorId, histPorUuid);
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    limpiarMensajes();
+                    mostrarMensajes(hist);
+                });
+            }
+            @Override public void onCanalActualizadoPorUuid(String canalUuid, Long canalIdRemoto) {
+                // Para compatibilidad P2P: comparar por UUID en lugar de ID
+                if (canalUuid == null || canalSeleccionado == null) return;
+                if (!canalUuid.equals(uuidCanalActual)) return;
+                System.out.println("[VistaChatPrincipal] onCanalActualizadoPorUuid match uuid=" + canalUuid + " canalLocal=" + canalSeleccionado.getId());
+                // Combinar mensajes por ID local y por UUID para obtener todos
+                java.util.List<MensajeLocal> histPorId = chatController.obtenerMensajesCanalDetallados(canalSeleccionado.getId());
+                java.util.List<MensajeLocal> histPorUuid = chatController.obtenerMensajesCanalDetalladosPorUuid(canalUuid);
+                java.util.List<MensajeLocal> hist = combinarMensajesCanal(histPorId, histPorUuid);
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     limpiarMensajes();
                     mostrarMensajes(hist);
@@ -476,6 +497,26 @@ public class VistaChatPrincipal extends JFrame {
                 if (id == null || usuarioSeleccionado == null) return;
                 if (!id.equals(usuarioSeleccionado.getId())) return;
                 java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(id);
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    limpiarMensajes();
+                    mostrarMensajes(hist);
+                });
+            }
+
+            @Override public void onPrivadoActualizadoPorNombre(String nombreUsuario, Long idRemoto) {
+                // Comparación por nombre para compatibilidad P2P (IDs diferentes entre servidores)
+                try { 
+                    System.out.println("[VistaChatPrincipal] onPrivadoActualizadoPorNombre nombre=" + nombreUsuario 
+                        + " idRemoto=" + idRemoto
+                        + " usuarioSeleccionado=" + (usuarioSeleccionado==null?"null":usuarioSeleccionado.getNombreDeUsuario())); 
+                } catch (Exception ignored) {}
+                if (nombreUsuario == null || usuarioSeleccionado == null) return;
+                String nombreSeleccionado = usuarioSeleccionado.getNombreDeUsuario();
+                if (nombreSeleccionado == null) return;
+                // Comparar por nombre (case-insensitive)
+                if (!nombreUsuario.trim().equalsIgnoreCase(nombreSeleccionado.trim())) return;
+                // Usar búsqueda por nombre para obtener la conversación (compatible con IDs P2P diferentes)
+                java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetalladaPorNombre(nombreSeleccionado);
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     limpiarMensajes();
                     mostrarMensajes(hist);
@@ -785,6 +826,25 @@ public class VistaChatPrincipal extends JFrame {
         });
     }
 
+    /** Combina dos listas de mensajes de canal, eliminando duplicados por ID y ordenando por fecha */
+    private java.util.List<MensajeLocal> combinarMensajesCanal(java.util.List<MensajeLocal> lista1, java.util.List<MensajeLocal> lista2) {
+        java.util.Map<Long, MensajeLocal> mapaById = new java.util.LinkedHashMap<>();
+        for (MensajeLocal m : lista1) {
+            if (m.getId() != null) mapaById.put(m.getId(), m);
+        }
+        for (MensajeLocal m : lista2) {
+            if (m.getId() != null) mapaById.putIfAbsent(m.getId(), m);
+        }
+        java.util.List<MensajeLocal> resultado = new java.util.ArrayList<>(mapaById.values());
+        resultado.sort((a, b) -> {
+            if (a.getTimeStamp() == null && b.getTimeStamp() == null) return 0;
+            if (a.getTimeStamp() == null) return -1;
+            if (b.getTimeStamp() == null) return 1;
+            return a.getTimeStamp().compareTo(b.getTimeStamp());
+        });
+        return resultado;
+    }
+
     private void limpiarMensajes() {
         if (contenedorMensajes == null) return;
         contenedorMensajes.removeAll();
@@ -894,7 +954,8 @@ public class VistaChatPrincipal extends JFrame {
 
     private void refrescarMensajesActuales() {
         if (usuarioSeleccionado != null) {
-            java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetallada(usuarioSeleccionado.getId());
+            String nombreUsuario = usuarioSeleccionado.getNombreDeUsuario();
+            java.util.List<MensajeLocal> hist = chatController.obtenerConversacionDetalladaPorNombre(nombreUsuario);
             limpiarMensajes();
             mostrarMensajes(hist);
         } else if (canalSeleccionado != null) {

@@ -239,6 +239,11 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
                 Long receptor = obtenerCampoLong(obj, "receptor", "receptorId");
                 String receptorNombre = obtenerCampoTextoPermitirNulo(obj, "receptorNombre", "nombreReceptor", "receptor_nombre", "receptorNombreUsuario", "receptorName");
                 Long canalId = obtenerCampoLong(obj, "canalId");
+                String canalUuid = obtenerCampoTextoPermitirNulo(obj, "canalUuid", "uuidCanal", "canalUUID");
+                if (canalUuid == null) {
+                    String canalObj = extraerObjeto(obj, "canal");
+                    if (canalObj != null) canalUuid = obtenerCampoTextoPermitirNulo(canalObj, "uuid", "canalUuid", "uuidCanal");
+                }
                 Long serverId = obtenerCampoLongRaiz(obj, "serverId", "mensajeId", "messageId", "id");
                 java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(obj, "timeStamp", "timestamp"));
                 String tipoConversacion = obtenerCampoTexto(obj, "tipoConversacion");
@@ -287,22 +292,22 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
                 if (esAudio) {
                     if (esCanal) {
-                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
+                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, canalUuid, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                         if (idIns > 0) insertados++;
                         if (canalId != null) canalesNotificar.add(canalId);
                     } else {
-                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
+                        long idIns = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                         if (idIns > 0) insertados++;
                         if (emisor != null) privadosNotificar.add(emisor);
                         if (receptor != null) privadosNotificar.add(receptor);
                     }
                 } else {
                     if (esCanal) {
-                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
+                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, canalUuid, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                         if (idIns > 0) insertados++;
                         if (canalId != null) canalesNotificar.add(canalId);
                     } else {
-                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
+                        long idIns = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                         if (idIns > 0) insertados++;
                         if (emisor != null) privadosNotificar.add(emisor);
                         if (receptor != null) privadosNotificar.add(receptor);
@@ -391,9 +396,13 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
             Long receptor = obtenerCampoLong(payloadMensaje, "receptor", "receptorId");
             String receptorNombre = obtenerCampoTextoPermitirNulo(payloadMensaje, "receptorNombre", "nombreReceptor", "receptor_nombre", "receptorNombreUsuario", "receptorName");
             Long canalId = obtenerCampoLong(payloadMensaje, "canalId");
-            if (canalId == null) {
+            String canalUuid = obtenerCampoTextoPermitirNulo(payloadMensaje, "canalUuid", "uuidCanal", "canalUUID");
+            if (canalId == null || canalUuid == null) {
                 String canalObj = extraerObjeto(payloadMensaje, "canal");
-                if (canalObj != null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
+                if (canalObj != null) {
+                    if (canalId == null) canalId = obtenerCampoLong(canalObj, "id", "canalId");
+                    if (canalUuid == null) canalUuid = obtenerCampoTextoPermitirNulo(canalObj, "uuid", "canalUuid", "uuidCanal");
+                }
             }
             Long serverId = obtenerCampoLongRaiz(payloadMensaje, "serverId", "mensajeId", "messageId", "id");
             java.sql.Timestamp serverTs = parseTimestamp(obtenerCampoTexto(payloadMensaje, "timeStamp", "timestamp"));
@@ -442,25 +451,35 @@ public class ObservadorEventosChat implements OyenteMensajesChat {
 
             if (esAudio) {
                 if (esCanal) {
-                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
-                    System.out.println("[ObservadorEventosChat] Audio canal insertado id=" + id + " canal=" + canalId);
+                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, canalUuid, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
+                    System.out.println("[ObservadorEventosChat] Audio canal insertado id=" + id + " canal=" + canalId + " uuid=" + canalUuid);
+                    // Notificar por ID y también por UUID (para compatibilidad P2P)
                     if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
+                    if (canalUuid != null && !canalUuid.isBlank()) ServicioEventosMensajes.instancia().notificarCanalPorUuid(canalUuid, canalId);
                 } else {
-                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
+                    long id = repo.insertarDesdeServidorAudioConRuta(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, null, transcripcion, tipoMsg != null ? tipoMsg : "AUDIO", ruta, audioBase64, audioMime, duracionSeg);
                     System.out.println("[ObservadorEventosChat] Audio privado insertado id=" + id + " receptor=" + receptor);
+                    // Notificar por ID y también por nombre (para compatibilidad P2P)
                     if (emisor != null) ServicioEventosMensajes.instancia().notificarPrivado(emisor);
+                    if (emisorNombre != null && !emisorNombre.isBlank()) ServicioEventosMensajes.instancia().notificarPrivadoPorNombre(emisorNombre, emisor);
                     if (receptor != null && !receptor.equals(emisor)) ServicioEventosMensajes.instancia().notificarPrivado(receptor);
+                    if (receptorNombre != null && !receptorNombre.isBlank() && !receptorNombre.equals(emisorNombre)) ServicioEventosMensajes.instancia().notificarPrivadoPorNombre(receptorNombre, receptor);
                 }
             } else { // TEXTO u otros
                 if (esCanal) {
-                        long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
-                    System.out.println("[ObservadorEventosChat] Texto canal insertado id=" + id + " canal=" + canalId);
+                        long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, null, null, canalId, canalUuid, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
+                    System.out.println("[ObservadorEventosChat] Texto canal insertado id=" + id + " canal=" + canalId + " uuid=" + canalUuid);
+                    // Notificar por ID y también por UUID (para compatibilidad P2P)
                     if (canalId != null) ServicioEventosMensajes.instancia().notificarCanal(canalId);
+                    if (canalUuid != null && !canalUuid.isBlank()) ServicioEventosMensajes.instancia().notificarCanalPorUuid(canalUuid, canalId);
                 } else {
-                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
+                    long id = repo.insertarDesdeServidorTexto(serverId, serverTs, emisor != null ? emisor : 0L, emisorNombre, receptor, receptorNombre, null, null, contenidoPlano != null ? contenidoPlano : "", tipoMsg != null ? tipoMsg : "TEXTO");
                     System.out.println("[ObservadorEventosChat] Texto privado insertado id=" + id + " receptor=" + receptor);
+                    // Notificar por ID y también por nombre (para compatibilidad P2P)
                     if (emisor != null) ServicioEventosMensajes.instancia().notificarPrivado(emisor);
+                    if (emisorNombre != null && !emisorNombre.isBlank()) ServicioEventosMensajes.instancia().notificarPrivadoPorNombre(emisorNombre, emisor);
                     if (receptor != null && !receptor.equals(emisor)) ServicioEventosMensajes.instancia().notificarPrivado(receptor);
+                    if (receptorNombre != null && !receptorNombre.isBlank() && !receptorNombre.equals(emisorNombre)) ServicioEventosMensajes.instancia().notificarPrivadoPorNombre(receptorNombre, receptor);
                 }
             }
         } catch (SQLException e) {

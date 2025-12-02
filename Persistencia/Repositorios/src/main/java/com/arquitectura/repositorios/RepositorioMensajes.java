@@ -157,6 +157,69 @@ public class RepositorioMensajes {
         return res;
     }
 
+    /** Listar mensajes de un canal por su UUID (útil en entornos P2P con IDs diferentes entre servidores) */
+    public java.util.List<com.arquitectura.entidades.MensajeLocal> listarMensajesDeCanalPorUuid(String canalUuid, Integer limit) throws SQLException {
+        if (canalUuid == null || canalUuid.isBlank()) return java.util.List.of();
+        String sql = "SELECT id, fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg " +
+                     "FROM mensajes WHERE canal_uuid = ? AND contexto_usuario_id = ? ORDER BY fecha_envio ASC" + (limit != null ? " LIMIT ?" : "");
+        java.util.List<com.arquitectura.entidades.MensajeLocal> res = new java.util.ArrayList<>();
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setString(1, canalUuid);
+            ps.setLong(2, contextoActual());
+            if (limit != null) ps.setInt(3, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long id = rs.getLong(1);
+                    java.sql.Timestamp ts = rs.getTimestamp(2);
+                    String tipo = rs.getString(3);
+                    Long emisor = rs.getObject(4) != null ? rs.getLong(4) : null;
+                    String emisorNombre = rs.getString(5);
+                    Long receptor = rs.getObject(6) != null ? rs.getLong(6) : null;
+                    String receptorNombre = rs.getString(7);
+                    Long canal = rs.getObject(8) != null ? rs.getLong(8) : null;
+                    boolean esAudio = rs.getBoolean(9);
+                    if (esAudio) {
+                        String ruta = rs.getString(11);
+                        String transcripcion = rs.getString(10);
+                        String audioBase64 = rs.getString(12);
+                        String audioMime = rs.getString(13);
+                        Integer duracion = rs.getObject(14) != null ? rs.getInt(14) : null;
+                        com.arquitectura.entidades.AudioMensajeLocal a = new com.arquitectura.entidades.AudioMensajeLocal();
+                        a.setId(id);
+                        a.setTimeStamp(ts != null ? ts.toLocalDateTime() : null);
+                        a.setTipo(tipo);
+                        a.setEmisor(emisor);
+                        a.setEmisorNombre(emisorNombre);
+                        a.setReceptor(receptor);
+                        a.setReceptorNombre(receptorNombre);
+                        a.setCanalId(canal);
+                        a.setRutaArchivo(ruta);
+                        a.setTranscripcion(transcripcion);
+                        if (audioBase64 != null) a.setAudioBase64(audioBase64);
+                        if (audioMime != null) a.setMime(audioMime);
+                        if (duracion != null) a.setDuracionSeg(duracion);
+                        res.add(a);
+                    } else {
+                        String texto = rs.getString(10);
+                        com.arquitectura.entidades.TextoMensajeLocal t = new com.arquitectura.entidades.TextoMensajeLocal();
+                        t.setId(id);
+                        t.setTimeStamp(ts != null ? ts.toLocalDateTime() : null);
+                        t.setTipo(tipo);
+                        t.setEmisor(emisor);
+                        t.setEmisorNombre(emisorNombre);
+                        t.setReceptor(receptor);
+                        t.setReceptorNombre(receptorNombre);
+                        t.setCanalId(canal);
+                        t.setContenido(texto);
+                        res.add(t);
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
     public java.util.List<com.arquitectura.entidades.MensajeLocal> listarMensajesPrivados(Long miId, Long otroId, Integer limit) throws SQLException {
         if (otroId == null) return java.util.List.of();
         boolean idPropioValido = miId != null && miId > 0;
@@ -179,6 +242,83 @@ public class RepositorioMensajes {
             } else {
                 ps.setLong(idx++, otroId);
                 ps.setLong(idx++, otroId);
+            }
+            if (limit != null) ps.setInt(idx, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long id = rs.getLong(1);
+                    java.sql.Timestamp ts = rs.getTimestamp(2);
+                    String tipo = rs.getString(3);
+                    Long emisor = rs.getObject(4) != null ? rs.getLong(4) : null;
+                    String emisorNombre = rs.getString(5);
+                    Long receptor = rs.getObject(6) != null ? rs.getLong(6) : null;
+                    String receptorNombre = rs.getString(7);
+                    boolean esAudio = rs.getBoolean(9);
+                    if (esAudio) {
+                        String ruta = rs.getString(11);
+                        String transcripcion = rs.getString(10);
+                        String audioBase64 = rs.getString(12);
+                        String audioMime = rs.getString(13);
+                        Integer duracion = rs.getObject(14) != null ? rs.getInt(14) : null;
+                        com.arquitectura.entidades.AudioMensajeLocal a = new com.arquitectura.entidades.AudioMensajeLocal();
+                        a.setId(id);
+                        a.setTimeStamp(ts != null ? ts.toLocalDateTime() : null);
+                        a.setTipo(tipo);
+                        a.setEmisor(emisor);
+                        a.setEmisorNombre(emisorNombre);
+                        a.setReceptor(receptor);
+                        a.setReceptorNombre(receptorNombre);
+                        a.setRutaArchivo(ruta);
+                        a.setTranscripcion(transcripcion);
+                        if (audioBase64 != null) a.setAudioBase64(audioBase64);
+                        if (audioMime != null) a.setMime(audioMime);
+                        if (duracion != null) a.setDuracionSeg(duracion);
+                        res.add(a);
+                    } else {
+                        String texto = rs.getString(10);
+                        com.arquitectura.entidades.TextoMensajeLocal t = new com.arquitectura.entidades.TextoMensajeLocal();
+                        t.setId(id);
+                        t.setTimeStamp(ts != null ? ts.toLocalDateTime() : null);
+                        t.setTipo(tipo);
+                        t.setEmisor(emisor);
+                        t.setEmisorNombre(emisorNombre);
+                        t.setReceptor(receptor);
+                        t.setReceptorNombre(receptorNombre);
+                        t.setContenido(texto);
+                        res.add(t);
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Lista mensajes privados entre el usuario actual y otro usuario identificado por nombre.
+     * Útil en entornos P2P donde los IDs pueden diferir entre servidores pero los nombres son consistentes.
+     */
+    public java.util.List<com.arquitectura.entidades.MensajeLocal> listarMensajesPrivadosPorNombre(String miNombre, String otroNombre, Integer limit) throws SQLException {
+        if (otroNombre == null || otroNombre.isBlank()) return java.util.List.of();
+        boolean nombrePropioValido = miNombre != null && !miNombre.isBlank();
+        String sql = "SELECT id, fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg " +
+                     "FROM mensajes WHERE canal_id IS NULL AND contexto_usuario_id = ? AND " +
+                     (nombrePropioValido
+                             ? "((LOWER(emisor_nombre) = LOWER(?) AND LOWER(receptor_nombre) = LOWER(?)) OR (LOWER(emisor_nombre) = LOWER(?) AND LOWER(receptor_nombre) = LOWER(?))) "
+                             : "(LOWER(emisor_nombre) = LOWER(?) OR LOWER(receptor_nombre) = LOWER(?)) ") +
+                     "ORDER BY fecha_envio ASC" + (limit != null ? " LIMIT ?" : "");
+        java.util.List<com.arquitectura.entidades.MensajeLocal> res = new java.util.ArrayList<>();
+        try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            int idx = 1;
+            ps.setLong(idx++, contextoActual());
+            if (nombrePropioValido) {
+                ps.setString(idx++, miNombre.trim());
+                ps.setString(idx++, otroNombre.trim());
+                ps.setString(idx++, otroNombre.trim());
+                ps.setString(idx++, miNombre.trim());
+            } else {
+                ps.setString(idx++, otroNombre.trim());
+                ps.setString(idx++, otroNombre.trim());
             }
             if (limit != null) ps.setInt(idx, limit);
             try (ResultSet rs = ps.executeQuery()) {
@@ -260,7 +400,7 @@ public class RepositorioMensajes {
         }
     }
 
-    public long insertarDesdeServidorTexto(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String contenido, String tipo) throws SQLException {
+    public long insertarDesdeServidorTexto(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String canalUuid, String contenido, String tipo) throws SQLException {
         if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, false, contenido, null, null, null, null)) {
             return 0L;
         }
@@ -275,8 +415,8 @@ public class RepositorioMensajes {
         }
 
         if (existePorCampos(emisorId, receptorId, canalId, false, contenido, null, serverTs)) return 0L;
-        String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, server_id, server_ts, contexto_usuario_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?, NULL, ?, ?, ?)";
+        String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, canal_uuid, es_audio, texto, ruta_audio, server_id, server_ts, contexto_usuario_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, NULL, ?, ?, ?)";
         try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
              PreparedStatement ps = cn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setTimestamp(1, serverTs);
@@ -286,17 +426,18 @@ public class RepositorioMensajes {
             if (receptorId != null) ps.setLong(5, receptorId); else ps.setNull(5, Types.BIGINT);
             if (receptorNombre != null) ps.setString(6, receptorNombre); else ps.setNull(6, Types.VARCHAR);
             if (canalId != null) ps.setLong(7, canalId); else ps.setNull(7, Types.BIGINT);
-            ps.setString(8, contenido != null ? contenido : "");
-            if (serverId != null) ps.setLong(9, serverId); else ps.setNull(9, Types.BIGINT);
-            if (serverTs != null) ps.setTimestamp(10, serverTs); else ps.setNull(10, Types.TIMESTAMP);
-            ps.setLong(11, contextoActual());
+            if (canalUuid != null) ps.setString(8, canalUuid); else ps.setNull(8, Types.VARCHAR);
+            ps.setString(9, contenido != null ? contenido : "");
+            if (serverId != null) ps.setLong(10, serverId); else ps.setNull(10, Types.BIGINT);
+            if (serverTs != null) ps.setTimestamp(11, serverTs); else ps.setNull(11, Types.TIMESTAMP);
+            ps.setLong(12, contextoActual());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) { if (rs.next()) return rs.getLong(1); }
         }
         return 0L;
     }
 
-    public long insertarDesdeServidorAudioConRuta(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String transcripcion, String tipo, String rutaArchivo, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
+    public long insertarDesdeServidorAudioConRuta(Long serverId, java.sql.Timestamp serverTs, Long emisorId, String emisorNombre, Long receptorId, String receptorNombre, Long canalId, String canalUuid, String transcripcion, String tipo, String rutaArchivo, String audioBase64, String mime, Integer duracionSeg) throws SQLException {
         if (serverId != null && intentarActualizarCoincidenciaLocal(serverId, serverTs, emisorId, emisorNombre, receptorId, receptorNombre, canalId, true, transcripcion, rutaArchivo, audioBase64, mime, duracionSeg)) {
             return 0L;
         }
@@ -311,8 +452,8 @@ public class RepositorioMensajes {
         }
 
         if (existePorCampos(emisorId, receptorId, canalId, true, null, rutaArchivo, serverTs)) return 0L;
-        String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg, server_id, server_ts, contexto_usuario_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO mensajes (fecha_envio, tipo, emisor_id, emisor_nombre, receptor_id, receptor_nombre, canal_id, canal_uuid, es_audio, texto, ruta_audio, audio_base64, audio_mime, audio_duracion_seg, server_id, server_ts, contexto_usuario_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection cn = ProveedorConexionCliente.instancia().obtenerConexion();
              PreparedStatement ps = cn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setTimestamp(1, serverTs);
@@ -322,14 +463,15 @@ public class RepositorioMensajes {
             if (receptorId != null) ps.setLong(5, receptorId); else ps.setNull(5, Types.BIGINT);
             if (receptorNombre != null) ps.setString(6, receptorNombre); else ps.setNull(6, Types.VARCHAR);
             if (canalId != null) ps.setLong(7, canalId); else ps.setNull(7, Types.BIGINT);
-            if (transcripcion != null) ps.setString(8, transcripcion); else ps.setNull(8, Types.CLOB);
-            ps.setString(9, rutaArchivo);
-            if (audioBase64 != null) ps.setString(10, audioBase64); else ps.setNull(10, Types.CLOB);
-            if (mime != null) ps.setString(11, mime); else ps.setNull(11, Types.VARCHAR);
-            if (duracionSeg != null) ps.setInt(12, duracionSeg); else ps.setNull(12, Types.INTEGER);
-            if (serverId != null) ps.setLong(13, serverId); else ps.setNull(13, Types.BIGINT);
-            if (serverTs != null) ps.setTimestamp(14, serverTs); else ps.setNull(14, Types.TIMESTAMP);
-            ps.setLong(15, contextoActual());
+            if (canalUuid != null) ps.setString(8, canalUuid); else ps.setNull(8, Types.VARCHAR);
+            if (transcripcion != null) ps.setString(9, transcripcion); else ps.setNull(9, Types.CLOB);
+            ps.setString(10, rutaArchivo);
+            if (audioBase64 != null) ps.setString(11, audioBase64); else ps.setNull(11, Types.CLOB);
+            if (mime != null) ps.setString(12, mime); else ps.setNull(12, Types.VARCHAR);
+            if (duracionSeg != null) ps.setInt(13, duracionSeg); else ps.setNull(13, Types.INTEGER);
+            if (serverId != null) ps.setLong(14, serverId); else ps.setNull(14, Types.BIGINT);
+            if (serverTs != null) ps.setTimestamp(15, serverTs); else ps.setNull(15, Types.TIMESTAMP);
+            ps.setLong(16, contextoActual());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) { if (rs.next()) return rs.getLong(1); }
         }

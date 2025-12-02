@@ -76,10 +76,36 @@ public class ControladorChat {
         }
     }
 
+    /**
+     * Obtiene la conversación con otro usuario identificado por nombre.
+     * Útil en entornos P2P donde los IDs pueden diferir entre servidores.
+     */
+    public List<MensajeLocal> obtenerConversacionDetalladaPorNombre(String nombreOtroUsuario) {
+        try {
+            var repo = new RepositorioMensajes();
+            String miNombre = clienteActual != null ? clienteActual.getNombreDeUsuario() : null;
+            List<MensajeLocal> mensajes = repo.listarMensajesPrivadosPorNombre(miNombre, nombreOtroUsuario, null);
+            return completarNombres(mensajes);
+        } catch (Exception e) {
+            return java.util.List.of();
+        }
+    }
+
     public List<MensajeLocal> obtenerMensajesCanalDetallados(Long canalId) {
         try {
             var repo = new RepositorioMensajes();
             List<MensajeLocal> mensajes = repo.listarMensajesDeCanal(canalId, null);
+            return completarNombres(mensajes);
+        } catch (Exception e) {
+            return java.util.List.of();
+        }
+    }
+
+    /** Obtener mensajes de un canal por su UUID (útil en entornos P2P con IDs diferentes entre servidores) */
+    public List<MensajeLocal> obtenerMensajesCanalDetalladosPorUuid(String canalUuid) {
+        try {
+            var repo = new RepositorioMensajes();
+            List<MensajeLocal> mensajes = repo.listarMensajesDeCanalPorUuid(canalUuid, null);
             return completarNombres(mensajes);
         } catch (Exception e) {
             return java.util.List.of();
