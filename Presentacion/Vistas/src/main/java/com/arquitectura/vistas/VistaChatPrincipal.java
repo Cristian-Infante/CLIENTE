@@ -538,14 +538,28 @@ public class VistaChatPrincipal extends JFrame {
 
                 sincronizarIdentidadUsuarioActual(usuario);
 
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    try {
-                        // Actualizar la lista de usuarios para reflejar el cambio de estado
-                        cargarUsuariosDisponibles();
-                    } catch (Exception e) {
-                        System.err.println("Error actualizando lista de usuarios: " + e.getMessage());
-                    }
-                });
+                // Actualizar estado del usuario en el modelo usando NOMBRE (no ID) para compatibilidad P2P
+                if (usuario != null && usuario.getNombreDeUsuario() != null) {
+                    final String nombreBuscar = usuario.getNombreDeUsuario().trim().toLowerCase();
+                    final Boolean nuevoEstado = usuario.getEstado();
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        try {
+                            // Buscar el usuario por nombre en el modelo y actualizar su estado
+                            for (int i = 0; i < modeloUsuarios.size(); i++) {
+                                ClienteLocal u = modeloUsuarios.getElementAt(i);
+                                if (u != null && u.getNombreDeUsuario() != null 
+                                    && u.getNombreDeUsuario().trim().toLowerCase().equals(nombreBuscar)) {
+                                    u.setEstado(nuevoEstado);
+                                    // Forzar repintado del elemento
+                                    modeloUsuarios.set(i, u);
+                                    break;
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error actualizando estado de usuario: " + e.getMessage());
+                        }
+                    });
+                }
             }
         };
         // prefer the simple registrar; logging already done in ServicioEventosMensajes.notificar* calls
